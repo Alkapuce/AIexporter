@@ -1,0 +1,107 @@
+import { describe, expect, it } from "vitest";
+import type { ConversationBundle } from "@aiexporter/core-schema";
+import { serializeConversation } from "../src/serializer";
+
+describe("serializeConversation", () => {
+  it("renders frontmatter and message sections", () => {
+    const bundle: ConversationBundle = {
+      platform: "chatgpt",
+      sourceId: "conv-1",
+      url: "https://chatgpt.com/c/conv-1",
+      title: "Sample Chat",
+      extractedAt: "2026-03-18T08:00:00.000Z",
+      sourceUpdatedAt: "2026-03-18T07:59:00.000Z",
+      participants: [
+        { id: "user", role: "user", name: "User" },
+        { id: "assistant", role: "assistant", name: "ChatGPT" },
+      ],
+      messages: [
+        { id: "m1", role: "user", markdown: "Hello" },
+        { id: "m2", role: "assistant", markdown: "Hi there" },
+      ],
+    };
+
+    const result = serializeConversation(bundle, { revision: "abc123" });
+
+    expect(result.messageCount).toBe(2);
+    expect(result.estimatedTokens).toBeGreaterThan(0);
+    expect(result.markdown).toContain("aiexporter: v1");
+    expect(result.markdown).toContain("conversation_id: conv-1");
+    expect(result.markdown).toContain("# Sample Chat");
+    expect(result.markdown).toContain("> Source: chatgpt");
+    expect(result.markdown).toContain("## User");
+    expect(result.markdown).toContain("## Assistant");
+  });
+
+  it("handles unexpected null frontmatter fields defensively", () => {
+    const bundle = {
+      platform: "deepseek",
+      sourceId: "conv-null",
+      url: "https://chat.deepseek.com/a/chat/s/conv-null",
+      title: null,
+      extractedAt: "2026-03-18T08:00:00.000Z",
+      sourceUpdatedAt: null,
+      participants: [{ id: "assistant", role: "assistant", name: "DeepSeek" }],
+      messages: [{ id: "m1", role: "assistant", markdown: "Hello" }],
+    } as unknown as ConversationBundle;
+
+    const result = serializeConversation(bundle, { revision: "null123" });
+
+    expect(result.markdown).toContain('title: ""');
+    expect(result.markdown).toContain('source_updated_at: ""');
+    expect(result.markdown).toContain("## Assistant");
+  });
+
+  it("supports compact formatting", () => {
+    const bundle: ConversationBundle = {
+      platform: "deepseek",
+      sourceId: "conv-compact",
+      url: "https://chat.deepseek.com/a/chat/s/conv-compact",
+      title: "Compact Chat",
+      extractedAt: "2026-03-18T08:00:00.000Z",
+      sourceUpdatedAt: "2026-03-18T07:59:00.000Z",
+      participants: [
+        { id: "user", role: "user", name: "User" },
+        { id: "assistant", role: "assistant", name: "DeepSeek" },
+      ],
+      messages: [
+        {
+          id: "m1",
+          role: "assistant",
+          markdown: "```ts\n// comment only\nconst x = 1;\n\n# comment\nreturn x;\n```",
+        },
+      ],
+    };
+
+    const result = serializeConversation(bundle, { revision: "compact123", format: "compact" });
+
+    expect(result.markdown).toContain("const x = 1;");
+    expect(result.markdown).toContain("return x;");
+    expect(result.markdown).not.toContain("// comment only");
+  });
+
+  it("supports code-only formatting", () => {
+    const bundle: ConversationBundle = {
+      platform: "chatgpt",
+      sourceId: "conv-code",
+      url: "https://chatgpt.com/c/conv-code",
+      title: "Code Chat",
+      extractedAt: "2026-03-18T08:00:00.000Z",
+      sourceUpdatedAt: "2026-03-18T07:59:00.000Z",
+      participants: [
+        { id: "user", role: "user", name: "User" },
+        { id: "assistant", role: "assistant", name: "ChatGPT" },
+      ],
+      messages: [
+        { id: "m1", role: "user", markdown: "No code here" },
+        { id: "m2", role: "assistant", markdown: "```python\nprint('hi')\n```" },
+      ],
+    };
+
+    const result = serializeConversation(bundle, { revision: "code123", format: "code-only" });
+
+    expect(result.messageCount).toBe(1);
+    expect(result.markdown).toContain("```python");
+    expect(result.markdown).not.toContain("No code here");
+  });
+});

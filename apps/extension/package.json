@@ -1,0 +1,32 @@
+{
+  "name": "@aiexporter/extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "wxt build",
+    "dev": "wxt",
+    "lint": "tsc --noEmit -p tsconfig.json",
+    "register:native-host": "pwsh -NoProfile -File ./scripts/register-native-host.ps1",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "verify:edge": "node scripts/verify-dashboard-file-actions.cjs",
+    "zip": "wxt zip"
+  },
+  "dependencies": {
+    "@aiexporter/adapter-sdk": "workspace:*",
+    "@aiexporter/adapters-chatgpt": "workspace:*",
+    "@aiexporter/adapters-deepseek": "workspace:*",
+    "@aiexporter/core-markdown": "workspace:*",
+    "@aiexporter/core-schema": "workspace:*",
+    "@wxt-dev/module-react": "^1.1.5",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "wxt": "^0.20.6"
+  },
+  "devDependencies": {
+    "@types/firefox-webext-browser": "^120.0.4",
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2"
+  }
+}

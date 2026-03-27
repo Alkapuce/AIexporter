@@ -1,0 +1,34 @@
+{
+  "name": "aiexporter",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.11.1",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=10.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "esbuild",
+      "spawn-sync"
+    ]
+  },
+  "scripts": {
+    "build": "corepack pnpm -r build",
+    "dev:ext": "corepack pnpm --filter @aiexporter/extension dev",
+    "dev:server": "corepack pnpm --filter @aiexporter/server dev",
+    "lint": "corepack pnpm -r lint",
+    "test": "corepack pnpm -r test",
+    "typecheck": "corepack pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.15",
+    "playwright": "1.52.0",
+    "prettier": "^3.5.3",
+    "tsup": "^8.5.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  }
+}

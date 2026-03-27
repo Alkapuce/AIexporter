@@ -1,0 +1,13 @@
+node_modules
+.pnpm-store
+dist
+.turbo
+.wxt
+.output
+coverage
+data
+tmp
+.playwright-mcp
+*.log
+.DS_Store
+Thumbs.db
