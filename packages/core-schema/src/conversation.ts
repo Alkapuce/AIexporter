@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const SourcePlatformSchema = z.enum(["chatgpt", "gemini", "deepseek"]);
+export const SourcePlatformSchema = z.enum(["chatgpt", "gemini", "aistudio", "deepseek"]);
 export type SourcePlatform = z.infer<typeof SourcePlatformSchema>;
 
 export const ParticipantRoleSchema = z.enum(["user", "assistant", "system"]);
@@ -54,4 +54,3 @@ export const ConversationArchiveRecordSchema = z.object({
   files: ArchiveFilePathsSchema,
 });
 export type ConversationArchiveRecord = z.infer<typeof ConversationArchiveRecordSchema>;
-

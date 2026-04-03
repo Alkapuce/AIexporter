@@ -18,7 +18,9 @@ AIexporter 是一个基于 pnpm workspaces 的 monorepo，用于把浏览器中�
 | --- | --- |
 | ChatGPT 扩展流程 | 已实现 |
 | DeepSeek 扩展流程 | 已实现，包含专门的发现与 worker 逻辑 |
-| Gemini 扩展流程 | 仅有包级脚手架，未达到可用状态 |
+| Gemini 扩展流程 | 已接入，采用保守的 DOM-first 发现与导出 |
+| AI Studio 扩展流程 | 已接入，支持 DOM-first 发现、导出与运行配置元数据 |
+| Dashboard / Popup 控制界面 | 已实现多平台控制与队列可视化 |
 | 本地 Markdown 导出 | 已实现 |
 | 本地 artifact 索引 | 已实现 |
 | Native host 文件动作 | 已实现，带浏览器 fallback |
@@ -35,10 +37,11 @@ packages/
   adapter-sdk/         共享 runtime 协议与默认配置
   adapters-chatgpt/    ChatGPT 提取辅助
   adapters-deepseek/   DeepSeek 提取与发现辅助
-  adapters-gemini/     Gemini 占位包
+  adapters-gemini/     Gemini 与 AI Studio 提取 / 发现辅助
   core-markdown/       统一 Markdown 序列化器
   core-schema/         共享 schema 与 bundle 类型
 docs/
+  browser-live-testing.md  Edge/CDP/Playwright 实测说明
   PLAN.md              初始阶段方案文档
   refactor-roadmap.md  当前重构结果与下一步优先级
 ```
@@ -88,8 +91,17 @@ background 运行时不再由一个超大入口文件承载所有逻辑。
 
 ### Gemini
 
-- `packages/adapters-gemini/` 中已有占位包
-- 尚未接成可生产使用的浏览器流程
+- 当前对话提取
+- 带懒加载处理的 DOM 历史发现
+- worker 驱动导出与本地持久化
+- 面向 Google 站点的保守节流策略
+
+### AI Studio
+
+- 当前 prompt/chat 提取
+- 基于 `/library` 页的历史发现
+- 运行配置元数据提取
+- worker 驱动导出与本地持久化
 
 ## 环境要求
 
@@ -165,6 +177,8 @@ Windows native-host 相关文件位于 `apps/extension/native-host/`。
 - `apps/extension/scripts/register-native-host.ps1`
 - `apps/extension/src/runtime/native-host.ts`
 
+当前 native host 会优先解析 Windows 的 Downloads 已知文件夹，因此 OneDrive 重定向后的 Downloads 路径也会被正确使用。
+
 ## Archive 格式
 
 本地和服务端归档共用统一布局：
@@ -235,13 +249,13 @@ corepack pnpm build
 现有浏览器验证辅助脚本位于：
 
 - `apps/extension/scripts/verify-dashboard-file-actions.cjs`
+- `docs/browser-live-testing.md`
 
 它依赖一个兼容的 Chromium 调试会话，以及已经加载好的扩展构建产物。
 
 ## 当前限制
 
-- 现有 `host_permissions` 只覆盖 `chatgpt.com` 与 `chat.deepseek.com`。
-- Gemini 还没有接入扩展 runtime。
+- Google 系站点仍采用保守的 DOM-first 发现，所以历史完整性仍取决于登录态页面在 sweep 期间实际暴露和懒加载出来的内容。
 - Native-host 增强文件动作仅支持 Windows。
 - background 调度与手动验证默认都要求浏览器在线，且用户已经登录目标 AI 站点。
 - 当前还没有独立的归档浏览 Web UI；server 主要负责 ingest 与 query。

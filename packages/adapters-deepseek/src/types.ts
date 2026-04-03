@@ -10,6 +10,7 @@ export interface DeepSeekHistoryResponse {
       chat_messages?: DeepSeekMessage[];
       chat_sessions?: DeepSeekSessionCandidate[];
       sessions?: DeepSeekSessionCandidate[];
+      has_more?: boolean;
     };
     items?: DeepSeekSessionCandidate[];
     list?: DeepSeekSessionCandidate[];

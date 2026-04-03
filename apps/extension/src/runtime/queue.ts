@@ -48,6 +48,7 @@ export function mergeDiscoveryEvent(
       ...event,
       title: event.title ?? existingBySource.event.title,
       sourceUpdatedAt: event.sourceUpdatedAt ?? existingBySource.event.sourceUpdatedAt,
+      sourceUpdatedLabel: event.sourceUpdatedLabel ?? existingBySource.event.sourceUpdatedLabel,
       revisionFingerprint:
         event.sourceUpdatedAt && !existingBySource.event.sourceUpdatedAt
           ? event.revisionFingerprint

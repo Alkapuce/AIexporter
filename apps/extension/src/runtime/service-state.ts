@@ -59,6 +59,7 @@ export function rebuildAllPlatformServices(
   return {
     chatgpt: rebuildPlatformServiceState(queueState.services.chatgpt, queueState, conversationIndex),
     gemini: rebuildPlatformServiceState(queueState.services.gemini, queueState, conversationIndex),
+    aistudio: rebuildPlatformServiceState(queueState.services.aistudio, queueState, conversationIndex),
     deepseek: rebuildPlatformServiceState(queueState.services.deepseek, queueState, conversationIndex),
   };
 }

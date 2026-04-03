@@ -41,24 +41,56 @@ import {
   isReceiverUnavailableError,
   requestTabRuntimeMessage,
   waitForTabComplete,
+  waitForWorkerReady,
 } from "./tab-runtime";
 
-type DeepSeekDiscoveryMode = "best-effort" | "full-bootstrap";
+type DiscoverySweepMode = "best-effort" | "full-bootstrap";
 
 export interface BackgroundServiceRuntime {
   clearPlatformLocalRecords(platform: SourcePlatform): Promise<QueueState>;
   extractConversationFromTab(tabId: number, timeoutMs: number): Promise<ConversationBundle>;
   handleTabRemoved(tabId: number): Promise<void>;
   queuePassiveDiscoveryEvent(event: DiscoveryEvent): Promise<{ total: number; queued: number }>;
+  requestPlatformStartupCatchup(platform: SourcePlatform): void;
   requestPlatformTick(platform: SourcePlatform): void;
-  runDeepSeekDiscoverySweep(platform: SourcePlatform, mode?: DeepSeekDiscoveryMode): Promise<void>;
+  runPlatformDiscoverySweep(platform: SourcePlatform, mode?: DiscoverySweepMode): Promise<void>;
   updatePlatformDesiredRunning(platform: SourcePlatform, desiredRunning: boolean): Promise<QueueState>;
 }
 
 export function createBackgroundServiceRuntime(): BackgroundServiceRuntime {
   const platformTickState = new Map<SourcePlatform, { running: boolean; rerun: boolean }>();
   const platformDiscoveryRuns = new Set<SourcePlatform>();
+  const platformStartupCatchup = new Set<SourcePlatform>();
+  const platformExecutionEpoch = new Map<SourcePlatform, number>();
   const intentionalWorkerTabClosures = new Set<number>();
+
+  function getPlatformExecutionEpoch(platform: SourcePlatform): number {
+    return platformExecutionEpoch.get(platform) ?? 0;
+  }
+
+  function bumpPlatformExecutionEpoch(platform: SourcePlatform): number {
+    const nextEpoch = getPlatformExecutionEpoch(platform) + 1;
+    platformExecutionEpoch.set(platform, nextEpoch);
+    return nextEpoch;
+  }
+
+  function isPlatformExecutionCurrent(platform: SourcePlatform, epoch: number): boolean {
+    return getPlatformExecutionEpoch(platform) === epoch;
+  }
+
+  function getPlatformDiscoveryUrl(platform: SourcePlatform): string | null {
+    if (platform === "deepseek") return "https://chat.deepseek.com/";
+    if (platform === "gemini") return "https://gemini.google.com/app";
+    if (platform === "aistudio") return "https://aistudio.google.com/library";
+    return null;
+  }
+
+  function getDiscoveryResponseTimeoutMs(platform: SourcePlatform, config: PlatformRuntimeConfig): number {
+    const baseline = config.discoveryReadyTimeoutMs + 10_000;
+    if (platform === "gemini") return Math.max(baseline, 180_000);
+    if (platform === "aistudio") return Math.max(baseline, 60_000);
+    return baseline;
+  }
 
   async function applyDiscoveryBatch(
     events: DiscoveryEvent[],
@@ -129,6 +161,7 @@ export function createBackgroundServiceRuntime(): BackgroundServiceRuntime {
       url: entry.url,
       title: entry.title,
       sourceUpdatedAt: entry.latestSourceUpdatedAt,
+      sourceUpdatedLabel: entry.latestSourceUpdatedLabel,
       revisionFingerprint: entry.latestDiscoveryFingerprint,
     };
   }
@@ -168,13 +201,14 @@ export function createBackgroundServiceRuntime(): BackgroundServiceRuntime {
     return queueableEvents.length;
   }
 
-  async function runDeepSeekDiscoverySweep(
+  async function runPlatformDiscoverySweep(
     platform: SourcePlatform,
-    mode: DeepSeekDiscoveryMode = "best-effort",
+    mode: DiscoverySweepMode = "best-effort",
   ): Promise<void> {
-    if (platform !== "deepseek") return;
+    const discoveryUrl = getPlatformDiscoveryUrl(platform);
+    if (!discoveryUrl) return;
     if (platformDiscoveryRuns.has(platform)) {
-      await writeBackgroundLog("background.discovery", "debug", "Skipped DeepSeek discovery sweep because one is already running.", {
+      await writeBackgroundLog("background.discovery", "debug", "Skipped platform discovery sweep because one is already running.", {
         platform,
         mode,
       });
@@ -182,6 +216,7 @@ export function createBackgroundServiceRuntime(): BackgroundServiceRuntime {
     }
 
     platformDiscoveryRuns.add(platform);
+    const runEpoch = getPlatformExecutionEpoch(platform);
 
     let tabId: number | undefined;
     let windowId: number | undefined;
@@ -196,7 +231,7 @@ export function createBackgroundServiceRuntime(): BackgroundServiceRuntime {
     try {
       if (mode === "full-bootstrap" && config.bootstrapWindowMode === "dedicated_window") {
         const discoveryWindow = await browser.windows.create({
-          url: "https://chat.deepseek.com/",
+          url: discoveryUrl,
           focused: true,
           type: "normal",
           width: 1180,
@@ -206,16 +241,32 @@ export function createBackgroundServiceRuntime(): BackgroundServiceRuntime {
         tabId = discoveryWindow.tabs?.[0]?.id;
       } else {
         const tab = await browser.tabs.create({
-          url: "https://chat.deepseek.com/",
+          url: discoveryUrl,
           active: false,
         });
         tabId = tab.id;
       }
 
       if (!tabId) {
-        throw new Error("DeepSeek discovery tab could not be created.");
+        throw new Error(`${platform} discovery tab could not be created.`);
       }
-      await waitForTabComplete(tabId, config.navigationTimeoutMs);
+      try {
+        await waitForTabComplete(tabId, config.navigationTimeoutMs);
+      } catch (error) {
+        await writeBackgroundLog(
+          "background.discovery",
+          "warn",
+          "Discovery tab did not reach complete state before timeout, falling back to receiver readiness.",
+          {
+            platform,
+            tabId,
+            mode,
+            error: error instanceof Error ? error.message : "Timed out waiting for discovery tab to load.",
+          },
+        );
+      }
+
+      await waitForWorkerReady(tabId, discoveryUrl, config.navigationTimeoutMs);
 
       const payloads = await requestTabRuntimeMessage<BridgeNetworkPayload[]>(
         tabId,
@@ -226,8 +277,8 @@ export function createBackgroundServiceRuntime(): BackgroundServiceRuntime {
           readyTimeoutMs: config.discoveryReadyTimeoutMs,
           stableRounds: config.discoveryScrollStableRounds,
         },
-        3,
-        config.discoveryReadyTimeoutMs + 10_000,
+        2,
+        getDiscoveryResponseTimeoutMs(platform, config),
       );
 
       const events: DiscoveryEvent[] = [];
@@ -240,10 +291,18 @@ export function createBackgroundServiceRuntime(): BackgroundServiceRuntime {
         });
       }
 
+      if (!isPlatformExecutionCurrent(platform, runEpoch)) {
+        return;
+      }
+
       const batchResult = await applyDiscoveryBatch(events, {
         priority: "backfill",
         discoveryState: "complete",
       });
+
+      if (!isPlatformExecutionCurrent(platform, runEpoch)) {
+        return;
+      }
 
       await patchPlatformService(platform, {
         status: "backfilling",
@@ -266,7 +325,9 @@ export function createBackgroundServiceRuntime(): BackgroundServiceRuntime {
       await writeBackgroundLog(
         "background.discovery",
         "info",
-        mode === "full-bootstrap" ? "Completed DeepSeek full bootstrap discovery sweep." : "Completed hidden DeepSeek discovery sweep.",
+        mode === "full-bootstrap"
+          ? `Completed ${platform} full bootstrap discovery sweep.`
+          : `Completed ${platform} background discovery sweep.`,
         {
           code: mode === "full-bootstrap" ? "discovery.full_completed" : "discovery.partial_result",
           platform,
@@ -277,6 +338,9 @@ export function createBackgroundServiceRuntime(): BackgroundServiceRuntime {
         },
       );
     } catch (error) {
+      if (!isPlatformExecutionCurrent(platform, runEpoch)) {
+        return;
+      }
       const lastError = error instanceof Error ? error.message : "DeepSeek discovery sweep failed.";
       await patchPlatformService(platform, {
         status: "error",
@@ -285,7 +349,9 @@ export function createBackgroundServiceRuntime(): BackgroundServiceRuntime {
       await writeBackgroundError(
         "background.discovery",
         "discovery.failed",
-        mode === "full-bootstrap" ? "DeepSeek full bootstrap discovery sweep failed." : "Hidden DeepSeek discovery sweep failed.",
+        mode === "full-bootstrap"
+          ? `${platform} full bootstrap discovery sweep failed.`
+          : `${platform} background discovery sweep failed.`,
         {
           platform,
           tabId,
@@ -302,9 +368,11 @@ export function createBackgroundServiceRuntime(): BackgroundServiceRuntime {
         await browser.tabs.remove(tabId).catch(() => undefined);
       }
       const latestState = await loadQueueState();
-      await patchPlatformService(platform, {
-        activeDiscoveryTabs: Math.max(0, latestState.services[platform].activeDiscoveryTabs - 1),
-      });
+      if (isPlatformExecutionCurrent(platform, runEpoch)) {
+        await patchPlatformService(platform, {
+          activeDiscoveryTabs: Math.max(0, latestState.services[platform].activeDiscoveryTabs - 1),
+        });
+      }
     }
   }
 
@@ -375,10 +443,18 @@ export function createBackgroundServiceRuntime(): BackgroundServiceRuntime {
     let tabId: number | undefined;
     const beforeState = await loadQueueState();
     const config = getPlatformConfig(beforeState.settings, platform);
+    const runEpoch = getPlatformExecutionEpoch(platform);
     let errorCode: string | undefined;
 
     try {
       tabId = await resolveWorkerTab(worker, item.event.url, config);
+
+      if (!isPlatformExecutionCurrent(platform, runEpoch)) {
+        if (tabId) {
+          await closeWorkerTab(tabId, intentionalWorkerTabClosures);
+        }
+        return;
+      }
 
       await updateQueueStateWithDerived((current) => ({
         ...current,
@@ -409,7 +485,23 @@ export function createBackgroundServiceRuntime(): BackgroundServiceRuntime {
         },
       }));
 
-      await waitForTabComplete(tabId, config.navigationTimeoutMs);
+      try {
+        await waitForTabComplete(tabId, config.navigationTimeoutMs);
+      } catch (error) {
+        await writeBackgroundLog(
+          "background.worker",
+          "warn",
+          "Worker tab did not reach complete state before timeout, falling back to receiver readiness.",
+          {
+            code: "worker.load_timeout_fallback",
+            platform,
+            workerId: worker.workerId,
+            tabId,
+            targetUrl: item.event.url,
+            error: error instanceof Error ? error.message : "Timed out waiting for conversation tab to load.",
+          },
+        );
+      }
       tabId = await ensureWorkerReceiver(worker, tabId, item.event.url, config);
       const currentTab = await browser.tabs.get(tabId);
       if (isChallengeLikeTab(currentTab)) {
@@ -419,8 +511,26 @@ export function createBackgroundServiceRuntime(): BackgroundServiceRuntime {
 
       await new Promise((resolve) => setTimeout(resolve, config.settleDelayMs));
       const bundle = await extractConversationFromTab(tabId, config.navigationTimeoutMs + 15_000);
+
+      if (!isPlatformExecutionCurrent(platform, runEpoch)) {
+        if (tabId) {
+          await closeWorkerTab(tabId, intentionalWorkerTabClosures);
+        }
+        await removeWorkerLease(worker.workerId);
+        return;
+      }
+
       const latestState = await loadQueueState();
       const persisted = await persistBundle(bundle, latestState.settings);
+
+      if (!isPlatformExecutionCurrent(platform, runEpoch)) {
+        if (tabId) {
+          await closeWorkerTab(tabId, intentionalWorkerTabClosures);
+        }
+        await removeWorkerLease(worker.workerId);
+        return;
+      }
+
       await markBundleExportResult(bundle, persisted.revision, "exported");
 
       await updateQueueStateWithDerived((current) => ({
@@ -475,6 +585,13 @@ export function createBackgroundServiceRuntime(): BackgroundServiceRuntime {
         await patchWorkerLease(worker.workerId, { tabId: undefined });
       }
     } catch (error) {
+      if (!isPlatformExecutionCurrent(platform, runEpoch)) {
+        if (tabId) {
+          await closeWorkerTab(tabId, intentionalWorkerTabClosures);
+        }
+        await removeWorkerLease(worker.workerId);
+        return;
+      }
       const lastError = error instanceof Error ? error.message : "Unknown worker error";
       if (!errorCode && isReceiverUnavailableError(error)) {
         errorCode = "worker.receiver_unavailable";
@@ -552,7 +669,9 @@ export function createBackgroundServiceRuntime(): BackgroundServiceRuntime {
         await removeWorkerLease(worker.workerId);
       }
     } finally {
-      requestPlatformTick(platform);
+      if (isPlatformExecutionCurrent(platform, runEpoch)) {
+        requestPlatformTick(platform);
+      }
     }
   }
 
@@ -565,13 +684,22 @@ export function createBackgroundServiceRuntime(): BackgroundServiceRuntime {
   async function maybeRunPlatformDiscovery(platform: SourcePlatform, queueState: QueueState): Promise<void> {
     const config = getPlatformConfig(queueState.settings, platform);
     const service = getPlatformService(queueState, platform);
-    if (platform !== "deepseek") return;
     if (!service.desiredRunning || !config.enabled || !config.autoExportEnabled) return;
     if (!config.historyBackfillEnabled || config.discoveryMode !== "background_backfill") return;
     if (service.activeDiscoveryTabs > 0) return;
+    if (platformStartupCatchup.has(platform)) {
+      platformStartupCatchup.delete(platform);
+      if (!service.lastDiscoveryAt && config.bootstrapRequireFullHistory) {
+        await runPlatformDiscoverySweep(platform, "full-bootstrap");
+        return;
+      }
+
+      await runPlatformDiscoverySweep(platform, "best-effort");
+      return;
+    }
 
     if (!service.lastDiscoveryAt && config.bootstrapRequireFullHistory) {
-      await runDeepSeekDiscoverySweep(platform, "full-bootstrap");
+      await runPlatformDiscoverySweep(platform, "full-bootstrap");
       return;
     }
 
@@ -582,7 +710,7 @@ export function createBackgroundServiceRuntime(): BackgroundServiceRuntime {
       return;
     }
 
-    await runDeepSeekDiscoverySweep(platform, "best-effort");
+    await runPlatformDiscoverySweep(platform, "best-effort");
   }
 
   async function maybeStartNextPlatformWorker(platform: SourcePlatform, queueState: QueueState): Promise<void> {
@@ -705,6 +833,11 @@ export function createBackgroundServiceRuntime(): BackgroundServiceRuntime {
       });
   }
 
+  function requestPlatformStartupCatchup(platform: SourcePlatform): void {
+    platformStartupCatchup.add(platform);
+    requestPlatformTick(platform);
+  }
+
   async function updatePlatformDesiredRunning(platform: SourcePlatform, desiredRunning: boolean): Promise<QueueState> {
     const nextState = await updateQueueStateWithDerived((current) => ({
       ...current,
@@ -727,6 +860,17 @@ export function createBackgroundServiceRuntime(): BackgroundServiceRuntime {
   }
 
   async function clearPlatformLocalRecords(platform: SourcePlatform): Promise<QueueState> {
+    const clearEpoch = bumpPlatformExecutionEpoch(platform);
+    const stateBeforeClear = await loadQueueState();
+    const workerTabIds = stateBeforeClear.activeWorkers
+      .filter((worker) => worker.platform === platform)
+      .map((worker) => worker.tabId)
+      .filter((tabId): tabId is number => typeof tabId === "number");
+
+    for (const workerTabId of workerTabIds) {
+      await closeWorkerTab(workerTabId, intentionalWorkerTabClosures);
+    }
+
     const artifacts = await loadArtifactIndex();
     const targetArtifacts = artifacts.filter((entry) => entry.platform === platform);
 
@@ -770,9 +914,11 @@ export function createBackgroundServiceRuntime(): BackgroundServiceRuntime {
     });
 
     if (desiredRunning) {
-      if (platform === "deepseek" && config.bootstrapRequireFullHistory) {
-        void runDeepSeekDiscoverySweep(platform, "full-bootstrap").finally(() => {
-          requestPlatformTick(platform);
+      if (config.bootstrapRequireFullHistory) {
+        void runPlatformDiscoverySweep(platform, "full-bootstrap").finally(() => {
+          if (isPlatformExecutionCurrent(platform, clearEpoch)) {
+            requestPlatformTick(platform);
+          }
         });
       } else {
         requestPlatformTick(platform);
@@ -830,8 +976,9 @@ export function createBackgroundServiceRuntime(): BackgroundServiceRuntime {
     extractConversationFromTab,
     handleTabRemoved,
     queuePassiveDiscoveryEvent,
+    requestPlatformStartupCatchup,
     requestPlatformTick,
-    runDeepSeekDiscoverySweep,
+    runPlatformDiscoverySweep,
     updatePlatformDesiredRunning,
   };
 }

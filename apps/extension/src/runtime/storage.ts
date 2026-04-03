@@ -87,6 +87,7 @@ function normalizeState(raw: unknown): QueueState {
     services: {
       chatgpt: normalizeService(candidate?.services?.chatgpt, DEFAULT_QUEUE_STATE.services.chatgpt),
       gemini: normalizeService(candidate?.services?.gemini, DEFAULT_QUEUE_STATE.services.gemini),
+      aistudio: normalizeService(candidate?.services?.aistudio, DEFAULT_QUEUE_STATE.services.aistudio),
       deepseek: normalizeService(candidate?.services?.deepseek, DEFAULT_QUEUE_STATE.services.deepseek),
     },
     activeWorkers: Array.isArray(candidate?.activeWorkers) ? (candidate.activeWorkers as WorkerLeaseState[]) : [],
@@ -104,6 +105,7 @@ function normalizeState(raw: unknown): QueueState {
       platforms: {
         chatgpt: normalizePlatformConfig(candidate?.settings?.platforms?.chatgpt, DEFAULT_EXTENSION_SETTINGS.platforms.chatgpt),
         gemini: normalizePlatformConfig(candidate?.settings?.platforms?.gemini, DEFAULT_EXTENSION_SETTINGS.platforms.gemini),
+        aistudio: normalizePlatformConfig(candidate?.settings?.platforms?.aistudio, DEFAULT_EXTENSION_SETTINGS.platforms.aistudio),
         deepseek: normalizePlatformConfig(candidate?.settings?.platforms?.deepseek, DEFAULT_EXTENSION_SETTINGS.platforms.deepseek),
       },
     },

@@ -16,7 +16,9 @@ export default defineBackground(() => {
     });
 
     if (state.settings.scheduler.autoStartOnBrowserLaunch) {
-      serviceRuntime.requestPlatformTick("deepseek");
+      SUPPORTED_PLATFORMS.forEach((platform) => {
+        serviceRuntime.requestPlatformStartupCatchup(platform);
+      });
     }
   });
 
@@ -26,7 +28,9 @@ export default defineBackground(() => {
     void ensureInitialized().then((state) => {
       void syncDownloadUiWithSettings(state.settings);
       void writeBackgroundLog("background.lifecycle", "info", "Extension installed or updated.");
-      serviceRuntime.requestPlatformTick("deepseek");
+      SUPPORTED_PLATFORMS.forEach((platform) => {
+        serviceRuntime.requestPlatformTick(platform);
+      });
     });
   });
 
@@ -35,7 +39,9 @@ export default defineBackground(() => {
       void syncDownloadUiWithSettings(state.settings);
       void writeBackgroundLog("background.lifecycle", "info", "Browser startup detected.");
       if (state.settings.scheduler.autoStartOnBrowserLaunch) {
-        serviceRuntime.requestPlatformTick("deepseek");
+        SUPPORTED_PLATFORMS.forEach((platform) => {
+          serviceRuntime.requestPlatformStartupCatchup(platform);
+        });
       }
     });
   });
@@ -43,7 +49,9 @@ export default defineBackground(() => {
   browser.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === PERIODIC_ALARM_NAME) {
       void writeBackgroundLog("background.lifecycle", "debug", "Periodic scheduler alarm triggered.");
-      serviceRuntime.requestPlatformTick("deepseek");
+      SUPPORTED_PLATFORMS.forEach((platform) => {
+        serviceRuntime.requestPlatformTick(platform);
+      });
       return;
     }
 

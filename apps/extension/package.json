@@ -17,6 +17,7 @@
     "@aiexporter/adapter-sdk": "workspace:*",
     "@aiexporter/adapters-chatgpt": "workspace:*",
     "@aiexporter/adapters-deepseek": "workspace:*",
+    "@aiexporter/adapters-gemini": "workspace:*",
     "@aiexporter/core-markdown": "workspace:*",
     "@aiexporter/core-schema": "workspace:*",
     "@wxt-dev/module-react": "^1.1.5",

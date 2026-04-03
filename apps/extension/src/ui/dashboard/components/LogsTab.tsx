@@ -10,8 +10,8 @@ interface LogsTabProps {
   logLevels: Record<DebugLogLevel, boolean>;
   logSearch: string;
   logScopeFilter: string;
-  logPlatformFilter: SourcePlatform | "all";
   logCodeFilter: string;
+  platformLabel: string;
   availableScopes: string[];
   availableCodes: string[];
   hoveredLogId: string | null;
@@ -21,7 +21,6 @@ interface LogsTabProps {
   onLevelToggle: (level: DebugLogLevel, checked: boolean) => void;
   onLogSearchChange: (value: string) => void;
   onScopeFilterChange: (value: string) => void;
-  onPlatformFilterChange: (value: SourcePlatform | "all") => void;
   onCodeFilterChange: (value: string) => void;
   onRefresh: () => void;
   onExportLogs: () => void;
@@ -66,8 +65,8 @@ export function LogsTab({
   logLevels,
   logSearch,
   logScopeFilter,
-  logPlatformFilter,
   logCodeFilter,
+  platformLabel,
   availableScopes,
   availableCodes,
   hoveredLogId,
@@ -77,7 +76,6 @@ export function LogsTab({
   onLevelToggle,
   onLogSearchChange,
   onScopeFilterChange,
-  onPlatformFilterChange,
   onCodeFilterChange,
   onRefresh,
   onExportLogs,
@@ -121,12 +119,18 @@ export function LogsTab({
 
       <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr 0.8fr 0.8fr", gap: 10, marginBottom: 12 }}>
         <input style={inputStyle} value={logSearch} onChange={(event) => onLogSearchChange(event.target.value)} placeholder={t("logs.search")} />
-        <select style={inputStyle} value={logPlatformFilter} onChange={(event) => onPlatformFilterChange(event.target.value as SourcePlatform | "all")}>
-          <option value="all">{t("logs.allPlatforms")}</option>
-          <option value="deepseek">DeepSeek</option>
-          <option value="chatgpt">ChatGPT</option>
-          <option value="gemini">Gemini</option>
-        </select>
+        <div
+          style={{
+            ...inputStyle,
+            display: "flex",
+            alignItems: "center",
+            background: "#f8fafc",
+            color: "#334155",
+            fontWeight: 600,
+          }}
+        >
+          {platformLabel}
+        </div>
         <select style={inputStyle} value={logScopeFilter} onChange={(event) => onScopeFilterChange(event.target.value)}>
           {availableScopes.map((scope) => (
             <option key={scope} value={scope}>

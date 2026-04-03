@@ -17,6 +17,7 @@ export interface BridgeNetworkPayload {
   url: string;
   title?: string;
   sourceUpdatedAt?: string;
+  sourceUpdatedLabel?: string;
 }
 
 export interface MainWorldBridgeMessage {
@@ -190,6 +191,7 @@ export interface ConversationIndexEntry {
   lastSeenAt: string;
   latestDiscoveryFingerprint: string;
   latestSourceUpdatedAt?: string;
+  latestSourceUpdatedLabel?: string;
   discoveryState: "partial" | "complete";
   exportState: "never_exported" | "exported" | "failed" | "pending";
   latestExportRevision?: string;

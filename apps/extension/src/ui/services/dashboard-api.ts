@@ -1,4 +1,5 @@
 import type {
+  ConversationIndexEntry,
   DebugState,
   ExtensionSettings,
   ExportArtifactEntry,
@@ -13,6 +14,7 @@ export interface DashboardStateSnapshot {
   queueState: QueueState;
   debugState: DebugState;
   artifactIndex: ExportArtifactEntry[];
+  conversationIndex: ConversationIndexEntry[];
 }
 
 async function sendMessage<T>(message: RuntimeMessage): Promise<T> {
@@ -20,17 +22,21 @@ async function sendMessage<T>(message: RuntimeMessage): Promise<T> {
 }
 
 export async function fetchDashboardState(): Promise<DashboardStateSnapshot> {
-  const [queueState, debugState, artifactRaw] = await Promise.all([
+  const [queueState, debugState, artifactRaw, conversationRaw] = await Promise.all([
     sendMessage<QueueState>({ type: "queue-state-request" }),
     sendMessage<DebugState>({ type: "debug-state-request" }),
     browser.storage.local.get("aiexporter.artifactIndex"),
+    browser.storage.local.get("aiexporter.conversationIndex"),
   ]);
 
   const artifactIndex = Array.isArray(artifactRaw["aiexporter.artifactIndex"])
     ? (artifactRaw["aiexporter.artifactIndex"] as ExportArtifactEntry[])
     : [];
+  const conversationIndex = Array.isArray(conversationRaw["aiexporter.conversationIndex"])
+    ? (conversationRaw["aiexporter.conversationIndex"] as ConversationIndexEntry[])
+    : [];
 
-  return { queueState, debugState, artifactIndex };
+  return { queueState, debugState, artifactIndex, conversationIndex };
 }
 
 export function requestQueueState(): Promise<QueueState> {

@@ -14,7 +14,14 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@aiexporter/adapter-sdk": "workspace:*"
+    "@aiexporter/adapter-sdk": "workspace:*",
+    "@aiexporter/core-schema": "workspace:*",
+    "turndown": "^7.2.0",
+    "turndown-plugin-gfm": "^1.0.2"
+  },
+  "devDependencies": {
+    "@types/jsdom": "^21.1.7",
+    "@types/turndown": "^5.0.5",
+    "jsdom": "^26.1.0"
   }
 }
-

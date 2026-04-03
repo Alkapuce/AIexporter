@@ -3,7 +3,7 @@ import type { ConversationBundle, SourcePlatform } from "@aiexporter/core-schema
 export const PERIODIC_ALARM_NAME = "aiexporter.scheduler";
 export const PLATFORM_ALARM_PREFIX = "aiexporter.platform";
 export const DEBUG_LAST_MANUAL_EXPORT_KEY = "aiexporter.debug.lastManualExport";
-export const SUPPORTED_PLATFORMS: SourcePlatform[] = ["chatgpt", "gemini", "deepseek"];
+export const SUPPORTED_PLATFORMS: SourcePlatform[] = ["chatgpt", "gemini", "aistudio", "deepseek"];
 export const ORPHANED_PROCESSING_RECOVERY_MS = 30_000;
 
 export function getPlatformAlarmName(platform: SourcePlatform): string {

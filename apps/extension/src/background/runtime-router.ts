@@ -1,4 +1,5 @@
-import type { RuntimeMessage } from "@aiexporter/adapter-sdk";
+import type { QueueState, RuntimeMessage } from "@aiexporter/adapter-sdk";
+import type { SourcePlatform } from "@aiexporter/core-schema";
 import { clearHistoricalItems, clearItemsByStatuses, markQueueItemStatus, removeQueueItem, retryFailedItems } from "../runtime/queue";
 import { downloadTextAsset } from "../runtime/downloads";
 import { writeBackgroundLog } from "../runtime/logger";
@@ -12,6 +13,7 @@ import {
   syncDownloadUiWithSettings,
   updateQueueStateWithDerived,
 } from "./state-access";
+import { SUPPORTED_PLATFORMS } from "./shared";
 import type { BackgroundServiceRuntime } from "./service-runtime";
 
 const BACKGROUND_MESSAGE_TYPES = [
@@ -86,8 +88,48 @@ const defaultDeps: BackgroundRuntimeRouterDeps = {
   writeBackgroundLog,
 };
 
-function inferManualExportPlatform(sender: browser.runtime.MessageSender): "chatgpt" | "deepseek" {
-  return sender.tab?.url?.includes("chat.deepseek.com") ? "deepseek" : "chatgpt";
+function inferManualExportPlatform(sender: browser.runtime.MessageSender): SourcePlatform {
+  const url = sender.tab?.url ?? "";
+  if (url.includes("chat.deepseek.com")) return "deepseek";
+  if (url.includes("gemini.google.com")) return "gemini";
+  if (url.includes("aistudio.google.com")) return "aistudio";
+  return "chatgpt";
+}
+
+async function enablePlatformForManagedRun(
+  deps: BackgroundRuntimeRouterDeps,
+  platform: SourcePlatform,
+): Promise<QueueState> {
+  const current = await deps.loadQueueState();
+  const currentConfig = current.settings.platforms[platform];
+  const shouldEnableBackfill = platform === "deepseek" || platform === "gemini" || platform === "aistudio";
+
+  return deps.updateQueueStateWithDerived((state) => ({
+    ...state,
+    settings: {
+      ...state.settings,
+      platforms: {
+        ...state.settings.platforms,
+        [platform]: {
+          ...state.settings.platforms[platform],
+          enabled: true,
+          autoExportEnabled: true,
+          historyBackfillEnabled: shouldEnableBackfill
+            ? true
+            : state.settings.platforms[platform].historyBackfillEnabled,
+          discoveryMode: shouldEnableBackfill ? "background_backfill" : currentConfig.discoveryMode,
+        },
+      },
+    },
+  }));
+}
+
+async function findQueueItemPlatform(
+  loadCurrentState: BackgroundRuntimeRouterDeps["loadQueueState"],
+  key: string,
+): Promise<SourcePlatform> {
+  const current = await loadCurrentState();
+  return current.items.find((item) => item.key === key)?.platform ?? "deepseek";
 }
 
 function createRuntimeMessageHandlers(
@@ -224,7 +266,7 @@ function createRuntimeMessageHandlers(
             : item,
         ),
       }));
-      serviceRuntime.requestPlatformTick("deepseek");
+      serviceRuntime.requestPlatformTick(await findQueueItemPlatform(deps.loadQueueState, message.key));
       return next;
     },
     "queue-item-remove": async (message) =>
@@ -247,11 +289,13 @@ function createRuntimeMessageHandlers(
             : item,
         ),
       }));
-      serviceRuntime.requestPlatformTick("deepseek");
+      serviceRuntime.requestPlatformTick(await findQueueItemPlatform(deps.loadQueueState, message.key));
       return next;
     },
     "queue-process-request": async () => {
-      serviceRuntime.requestPlatformTick("deepseek");
+      SUPPORTED_PLATFORMS.forEach((platform) => {
+        serviceRuntime.requestPlatformTick(platform);
+      });
       return deps.loadQueueState();
     },
     "queue-retry-request": async () => {
@@ -259,24 +303,29 @@ function createRuntimeMessageHandlers(
         ...current,
         items: retryFailedItems(current.items),
       }));
-      serviceRuntime.requestPlatformTick("deepseek");
+      SUPPORTED_PLATFORMS.forEach((platform) => {
+        serviceRuntime.requestPlatformTick(platform);
+      });
       return next;
     },
     "queue-state-request": async () => deps.loadQueueState(),
     "service-discovery-run": async (message) => {
+      await enablePlatformForManagedRun(deps, message.platform);
       serviceRuntime.requestPlatformTick(message.platform);
       return deps.loadQueueState();
     },
     "service-full-bootstrap-run": async (message) => {
-      if (message.platform === "deepseek") {
-        void serviceRuntime.runDeepSeekDiscoverySweep(message.platform, "full-bootstrap").finally(() => {
-          serviceRuntime.requestPlatformTick(message.platform);
-        });
-      }
+      await enablePlatformForManagedRun(deps, message.platform);
+      void serviceRuntime.runPlatformDiscoverySweep(message.platform, "full-bootstrap").finally(() => {
+        serviceRuntime.requestPlatformTick(message.platform);
+      });
       return deps.loadQueueState();
     },
     "service-pause": async (message) => serviceRuntime.updatePlatformDesiredRunning(message.platform, false),
-    "service-resume": async (message) => serviceRuntime.updatePlatformDesiredRunning(message.platform, true),
+    "service-resume": async (message) => {
+      await enablePlatformForManagedRun(deps, message.platform);
+      return serviceRuntime.updatePlatformDesiredRunning(message.platform, true);
+    },
     "service-state-request": async () => deps.loadQueueState(),
     "service-toggle": async (message) => {
       await deps.updateQueueStateWithDerived((current) => ({

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { parseHistoryResponse } from "./adapter";
-import { extractDiscoveryPayloadsFromResponse, extractSessionIdFromUrl } from "./discovery";
+import {
+  extractDiscoveryPayloadsFromResponse,
+  extractSessionIdFromUrl,
+  mergeDiscoveryPayloads,
+  summarizeHistoryPage,
+} from "./discovery";
 
 describe("deepseek discovery", () => {
   it("extracts the session id from a DeepSeek conversation URL", () => {
@@ -42,6 +47,60 @@ describe("deepseek discovery", () => {
 
     expect(payloads).toHaveLength(1);
     expect(payloads[0]?.sourceUpdatedAt).toBe("2025-02-23T18:09:54.343Z");
+  });
+
+  it("summarizes fetch_page history pagination state", () => {
+    const summary = summarizeHistoryPage({
+      code: 0,
+      data: {
+        biz_data: {
+          has_more: true,
+          chat_sessions: [
+            {
+              id: "session-1",
+              title: "First",
+              updated_at: 1740334194.343,
+            },
+            {
+              id: "session-2",
+              title: "Second",
+              updated_at: "1740334294.343",
+            },
+          ],
+        },
+      },
+    });
+
+    expect(summary.hasMore).toBe(true);
+    expect(summary.payloads.map((item) => item.sourceId)).toEqual(["session-1", "session-2"]);
+    expect(summary.nextCursorUpdatedAt).toBe("1740334294.343");
+  });
+
+  it("merges discovery payloads with later sources taking precedence", () => {
+    const merged = mergeDiscoveryPayloads(
+      [
+        {
+          sourceId: "session-1",
+          url: "https://chat.deepseek.com/a/chat/s/session-1",
+          title: "From sidebar",
+        },
+      ],
+      [
+        {
+          sourceId: "session-1",
+          url: "https://chat.deepseek.com/a/chat/s/session-1",
+          title: "From api",
+          sourceUpdatedAt: "2026-03-30T12:00:00.000Z",
+        },
+      ],
+    );
+
+    expect(merged).toHaveLength(1);
+    expect(merged[0]).toMatchObject({
+      sourceId: "session-1",
+      title: "From api",
+      sourceUpdatedAt: "2026-03-30T12:00:00.000Z",
+    });
   });
 
   it("parses history responses into a bundle", () => {

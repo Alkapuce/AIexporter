@@ -18,7 +18,9 @@ This repository currently focuses on a Windows-first developer workflow with:
 | --- | --- |
 | ChatGPT extension flow | Implemented |
 | DeepSeek extension flow | Implemented with dedicated discovery and worker logic |
-| Gemini extension flow | Package scaffold only, not production-ready |
+| Gemini extension flow | Implemented with conservative DOM-first discovery and export |
+| AI Studio extension flow | Implemented with DOM-first discovery, export, and settings metadata capture |
+| Dashboard / popup controls | Implemented with multi-platform controls and queue visibility |
 | Local Markdown export | Implemented |
 | Local artifact index | Implemented |
 | Native host file actions | Implemented for Windows, with browser fallback |
@@ -35,10 +37,11 @@ packages/
   adapter-sdk/         shared runtime contracts and defaults
   adapters-chatgpt/    ChatGPT extraction helpers
   adapters-deepseek/   DeepSeek extraction and discovery helpers
-  adapters-gemini/     Gemini placeholder package
+  adapters-gemini/     Gemini + AI Studio extraction and discovery helpers
   core-markdown/       canonical Markdown serializer
   core-schema/         shared schema and bundle types
 docs/
+  browser-live-testing.md  practical Edge/CDP/Playwright testing notes
   PLAN.md              original staged implementation plan
   refactor-roadmap.md  current refactor notes and next priorities
 ```
@@ -88,8 +91,17 @@ For the current debt register and the next refactor targets, see `docs/refactor-
 
 ### Gemini
 
-- package scaffold exists in `packages/adapters-gemini/`
-- not wired into a production-ready browser flow yet
+- current-page extraction
+- background DOM-history discovery with lazy-load handling
+- worker-driven export and local persistence
+- conservative throttling tuned for Google properties
+
+### AI Studio
+
+- current prompt/chat extraction
+- library-page DOM discovery
+- run-settings metadata capture
+- worker-driven export and local persistence
 
 ## Prerequisites
 
@@ -165,6 +177,8 @@ Relevant implementation files:
 - `apps/extension/scripts/register-native-host.ps1`
 - `apps/extension/src/runtime/native-host.ts`
 
+The native host now resolves the Windows Downloads known-folder first, so OneDrive-redirected Downloads paths are respected.
+
 ## Archive format
 
 Local and server-side archives share the same normalized layout:
@@ -235,13 +249,13 @@ When validating extension changes, prefer a real browser session that confirms:
 The existing browser verification helper lives at:
 
 - `apps/extension/scripts/verify-dashboard-file-actions.cjs`
+- `docs/browser-live-testing.md`
 
 It assumes a compatible Chromium debugging session and a loaded extension build.
 
 ## Current limitations
 
-- The current host permissions only cover `chatgpt.com` and `chat.deepseek.com`.
-- Gemini is not yet wired into the extension runtime.
+- Google properties still use conservative DOM-first discovery, so historical completeness depends on what the logged-in UI exposes and lazy-loads during the sweep.
 - Native-host enhanced file actions are Windows-specific.
 - Background scheduling and manual verification still assume the browser is online and already authenticated into the target AI site.
 - There is no dedicated archive browsing web UI yet; the current server focuses on ingestion and query.

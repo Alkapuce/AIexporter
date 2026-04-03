@@ -40,6 +40,12 @@ function parseArray(candidates: unknown): BridgeNetworkPayload[] {
   });
 }
 
+export interface DeepSeekHistoryPageSummary {
+  payloads: BridgeNetworkPayload[];
+  hasMore: boolean;
+  nextCursorUpdatedAt: string | number | null;
+}
+
 export function extractSessionIdFromUrl(url: string): string | null {
   const match = CONVERSATION_PATTERN.exec(url);
   return match?.[1] ?? null;
@@ -66,11 +72,7 @@ export function extractDiscoveryPayloadsFromResponse(payload: unknown): BridgeNe
     ...parseArray(response.data?.list),
   ];
 
-  const deduped = new Map<string, BridgeNetworkPayload>();
-  items.forEach((item) => {
-    deduped.set(item.sourceId, item);
-  });
-  return Array.from(deduped.values());
+  return mergeDiscoveryPayloads(items);
 }
 
 export function extractDiscoveryPayloadsFromDocument(document: Document, origin = "https://chat.deepseek.com"): BridgeNetworkPayload[] {
@@ -94,4 +96,25 @@ export function extractDiscoveryPayloadsFromDocument(document: Document, origin 
   });
 
   return Array.from(deduped.values());
+}
+
+export function mergeDiscoveryPayloads(
+  ...groups: ReadonlyArray<readonly BridgeNetworkPayload[]>
+): BridgeNetworkPayload[] {
+  const deduped = new Map<string, BridgeNetworkPayload>();
+  groups.forEach((group) => {
+    group.forEach((item) => {
+      deduped.set(item.sourceId, item);
+    });
+  });
+  return Array.from(deduped.values());
+}
+
+export function summarizeHistoryPage(payload: DeepSeekHistoryResponse): DeepSeekHistoryPageSummary {
+  const sessions = payload.data?.biz_data?.chat_sessions ?? [];
+  return {
+    payloads: extractDiscoveryPayloadsFromResponse(payload),
+    hasMore: Boolean(payload.data?.biz_data?.has_more),
+    nextCursorUpdatedAt: sessions.length > 0 ? sessions[sessions.length - 1]?.updated_at ?? null : null,
+  };
 }

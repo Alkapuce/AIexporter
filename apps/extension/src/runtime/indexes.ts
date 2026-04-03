@@ -19,6 +19,7 @@ export function upsertConversationIndexEntry(
         lastSeenAt: now,
         latestDiscoveryFingerprint: event.revisionFingerprint,
         latestSourceUpdatedAt: event.sourceUpdatedAt,
+        latestSourceUpdatedLabel: event.sourceUpdatedLabel,
         discoveryState,
         exportState: "never_exported",
       },
@@ -35,6 +36,7 @@ export function upsertConversationIndexEntry(
           lastSeenAt: now,
           latestDiscoveryFingerprint: event.revisionFingerprint,
           latestSourceUpdatedAt: event.sourceUpdatedAt ?? entry.latestSourceUpdatedAt,
+          latestSourceUpdatedLabel: event.sourceUpdatedLabel ?? entry.latestSourceUpdatedLabel,
           discoveryState: discoveryState === "complete" ? "complete" : entry.discoveryState,
         }
       : entry,

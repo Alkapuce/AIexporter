@@ -38,6 +38,9 @@ importers:
       '@aiexporter/adapters-deepseek':
         specifier: workspace:*
         version: link:../../packages/adapters-deepseek
+      '@aiexporter/adapters-gemini':
+        specifier: workspace:*
+        version: link:../../packages/adapters-gemini
       '@aiexporter/core-markdown':
         specifier: workspace:*
         version: link:../../packages/core-markdown
@@ -150,6 +153,25 @@ importers:
       '@aiexporter/adapter-sdk':
         specifier: workspace:*
         version: link:../adapter-sdk
+      '@aiexporter/core-schema':
+        specifier: workspace:*
+        version: link:../core-schema
+      turndown:
+        specifier: ^7.2.0
+        version: 7.2.2
+      turndown-plugin-gfm:
+        specifier: ^1.0.2
+        version: 1.0.2
+    devDependencies:
+      '@types/jsdom':
+        specifier: ^21.1.7
+        version: 21.1.7
+      '@types/turndown':
+        specifier: ^5.0.5
+        version: 5.0.6
+      jsdom:
+        specifier: ^26.1.0
+        version: 26.1.0
 
   packages/core-markdown:
     dependencies:

@@ -1,14 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import type {
-  DebugLogEntry,
-  DebugLogLevel,
-  ExtensionSettings,
-  ExportArtifactEntry,
-  PlatformRuntimeConfig,
-  QueueItemStatus,
-  QueueState,
-  UiLocale,
-} from "@aiexporter/adapter-sdk";
+import type { DebugLogLevel, ExtensionSettings, PlatformRuntimeConfig, UiLocale } from "@aiexporter/adapter-sdk";
 import type { SourcePlatform } from "@aiexporter/core-schema";
 import { useI18n } from "../i18n/useI18n";
 import {
@@ -17,7 +8,6 @@ import {
   clearPlatformLocalRecords,
   clearQueueStatuses,
   exportLogs,
-  fetchDashboardState,
   forceExportQueueItem,
   openDashboard,
   openLatestArtifact,
@@ -25,8 +15,6 @@ import {
   pausePlatform,
   processQueue,
   removeQueueItem,
-  requestDebugState,
-  requestQueueState,
   resumePlatform,
   retryFailed,
   retryQueueItem,
@@ -36,17 +24,38 @@ import {
   updatePlatformSettings,
   updateSettings,
 } from "../services/dashboard-api";
-import { findLatestOpenableArtifactForConversation } from "../../runtime/artifacts";
+import {
+  buildAvailableLogCodes,
+  buildAvailableLogScopes,
+  buildDashboardArtifactState,
+  buildDashboardConversationIndexMap,
+  filterDashboardLogs,
+  filterDashboardQueueItems,
+  sortDashboardQueueItems,
+  type DashboardQueueSortKey,
+  type DashboardSortDirection,
+  updateDownloadsSettingDraft,
+  updateGlobalSettingDraft,
+  updatePlatformSettingDraft,
+  updateSchedulerSettingDraft,
+} from "./controllers";
 import { ActionButton } from "./components/ActionButton";
 import { LogsTab } from "./components/LogsTab";
 import { OverviewTab } from "./components/OverviewTab";
 import { QueueTab } from "./components/QueueTab";
 import { SettingsTab } from "./components/SettingsTab";
+import { useDashboardSnapshot, type DashboardMode } from "./useDashboardSnapshot";
 
-export type DashboardMode = "popup" | "options" | "dashboard";
 type DashboardTab = "overview" | "queue" | "logs" | "settings";
 
-const deepseekPlatform: SourcePlatform = "deepseek";
+const popupPlatform: SourcePlatform = "deepseek";
+const dashboardPlatforms: SourcePlatform[] = ["deepseek", "gemini", "aistudio", "chatgpt"];
+const platformLabels: Record<SourcePlatform, string> = {
+  deepseek: "DeepSeek",
+  gemini: "Gemini",
+  aistudio: "AI Studio",
+  chatgpt: "ChatGPT",
+};
 
 const containerStyle: CSSProperties = {
   fontFamily: "ui-sans-serif, system-ui, sans-serif",
@@ -67,44 +76,17 @@ function formatTimestamp(value: string | undefined): string {
   return new Date(value).toLocaleString();
 }
 
-function cloneSettings(settings: ExtensionSettings): ExtensionSettings {
-  return {
-    ...settings,
-    scheduler: { ...settings.scheduler },
-    downloads: { ...settings.downloads },
-    platforms: {
-      chatgpt: { ...settings.platforms.chatgpt },
-      gemini: { ...settings.platforms.gemini },
-      deepseek: { ...settings.platforms.deepseek },
-    },
-  };
-}
-
-function normalizeLogPlatform(entry: DebugLogEntry): SourcePlatform | undefined {
-  if (entry.platform) return entry.platform;
-  if (typeof entry.details?.platform === "string") {
-    return entry.details.platform as SourcePlatform;
-  }
-  if (entry.scope.includes("deepseek")) return "deepseek";
-  if (entry.scope.includes("chatgpt")) return "chatgpt";
-  if (entry.scope.includes("gemini")) return "gemini";
-  return undefined;
-}
-
-function isStatusFilterMatch(filter: string, status: QueueItemStatus): boolean {
-  return filter === "all" || filter === status;
-}
-
 export function DashboardApp({ mode }: { mode: DashboardMode }) {
-  const [queueState, setQueueState] = useState<QueueState | null>(null);
-  const [debugState, setDebugState] = useState<Awaited<ReturnType<typeof requestDebugState>> | null>(null);
-  const [artifactIndex, setArtifactIndex] = useState<ExportArtifactEntry[]>([]);
-  const [settingsDraft, setSettingsDraft] = useState<ExtensionSettings | null>(null);
+  const { queueState, debugState, artifactIndex, conversationIndex, settingsDraft, setSettingsDraft, refresh } =
+    useDashboardSnapshot(mode);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [tab, setTab] = useState<DashboardTab>("overview");
+  const [selectedPlatform, setSelectedPlatform] = useState<SourcePlatform>("deepseek");
   const [queueSearch, setQueueSearch] = useState("");
   const [queueStatusFilter, setQueueStatusFilter] = useState("all");
+  const [queueSortKey, setQueueSortKey] = useState<DashboardQueueSortKey>("updatedAt");
+  const [queueSortDirection, setQueueSortDirection] = useState<DashboardSortDirection>("desc");
   const [logLevels, setLogLevels] = useState<Record<DebugLogLevel, boolean>>({
     debug: true,
     info: true,
@@ -113,7 +95,6 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
   });
   const [logSearch, setLogSearch] = useState("");
   const [logScopeFilter, setLogScopeFilter] = useState("all");
-  const [logPlatformFilter, setLogPlatformFilter] = useState<SourcePlatform | "all">("all");
   const [logCodeFilter, setLogCodeFilter] = useState("all");
   const [hoveredLogId, setHoveredLogId] = useState<string | null>(null);
   const [selectedLogId, setSelectedLogId] = useState<string | null>(null);
@@ -122,28 +103,6 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
   const locale: UiLocale = settingsDraft?.uiLocale ?? queueState?.settings.uiLocale ?? "zh-CN";
   const { t } = useI18n(locale);
   const debugLogs = debugState?.logs ?? [];
-
-  const refresh = async () => {
-    const snapshot = await fetchDashboardState();
-    setQueueState(snapshot.queueState);
-    setDebugState(snapshot.debugState);
-    setArtifactIndex(snapshot.artifactIndex);
-    setSettingsDraft((current) => current ?? cloneSettings(snapshot.queueState.settings));
-  };
-
-  useEffect(() => {
-    void refresh();
-    const interval = window.setInterval(() => {
-      void refresh();
-    }, mode === "popup" ? 3_000 : 4_000);
-    return () => window.clearInterval(interval);
-  }, [mode]);
-
-  useEffect(() => {
-    if (queueState) {
-      setSettingsDraft(cloneSettings(queueState.settings));
-    }
-  }, [queueState?.settings]);
 
   const runAction = async (action: () => Promise<unknown>) => {
     setBusy(true);
@@ -159,57 +118,26 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
   };
 
   const setGlobalSetting = <K extends keyof ExtensionSettings>(key: K, value: ExtensionSettings[K]) => {
-    setSettingsDraft((current) => (current ? { ...current, [key]: value } : current));
+    setSettingsDraft((current) => (current ? updateGlobalSettingDraft(current, key, value) : current));
   };
 
   const setSchedulerSetting = <K extends keyof ExtensionSettings["scheduler"]>(
     key: K,
     value: ExtensionSettings["scheduler"][K],
   ) => {
-    setSettingsDraft((current) =>
-      current
-        ? {
-            ...current,
-            scheduler: {
-              ...current.scheduler,
-              [key]: value,
-            },
-          }
-        : current,
-    );
+    setSettingsDraft((current) => (current ? updateSchedulerSettingDraft(current, key, value) : current));
   };
 
   const setDownloadsSetting = <K extends keyof ExtensionSettings["downloads"]>(
     key: K,
     value: ExtensionSettings["downloads"][K],
   ) => {
-    setSettingsDraft((current) =>
-      current
-        ? {
-            ...current,
-            downloads: {
-              ...current.downloads,
-              [key]: value,
-            },
-          }
-        : current,
-    );
+    setSettingsDraft((current) => (current ? updateDownloadsSettingDraft(current, key, value) : current));
   };
 
   const setDeepSeekSetting = <K extends keyof PlatformRuntimeConfig>(key: K, value: PlatformRuntimeConfig[K]) => {
     setSettingsDraft((current) =>
-      current
-        ? {
-            ...current,
-            platforms: {
-              ...current.platforms,
-              deepseek: {
-                ...current.platforms.deepseek,
-                [key]: value,
-              },
-            },
-          }
-        : current,
+      current ? updatePlatformSettingDraft(current, selectedPlatform, key, value) : current,
     );
   };
 
@@ -218,101 +146,121 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
     await runAction(() => updateSettings({ uiLocale: nextLocale }));
   };
 
-  const availableLogScopes = useMemo(
-    () => ["all", ...Array.from(new Set(debugLogs.map((entry) => entry.scope))).sort()],
-    [debugLogs],
+  useEffect(() => {
+    setLogScopeFilter("all");
+    setLogCodeFilter("all");
+    setHoveredLogId(null);
+    setSelectedLogId(null);
+  }, [selectedPlatform]);
+
+  const platformLogs = useMemo(
+    () =>
+      filterDashboardLogs(debugLogs, {
+        logLevels: { debug: true, info: true, warn: true, error: true },
+        logSearch: "",
+        logScopeFilter: "all",
+        logPlatformFilter: selectedPlatform,
+        logCodeFilter: "all",
+      }),
+    [debugLogs, selectedPlatform],
   );
-  const availableLogCodes = useMemo(
-    () => ["all", ...Array.from(new Set(debugLogs.map((entry) => entry.code).filter(Boolean) as string[])).sort()],
-    [debugLogs],
+  const availableLogScopes = useMemo(() => buildAvailableLogScopes(platformLogs), [platformLogs]);
+  const availableLogCodes = useMemo(() => buildAvailableLogCodes(platformLogs), [platformLogs]);
+  const filteredLogs = useMemo(
+    () =>
+      filterDashboardLogs(debugLogs, {
+        logLevels,
+        logSearch,
+        logScopeFilter,
+        logPlatformFilter: selectedPlatform,
+        logCodeFilter,
+      }),
+    [debugLogs, logCodeFilter, logLevels, logScopeFilter, logSearch, selectedPlatform],
   );
-  const filteredLogs = debugLogs.filter((entry) => {
-    const matchesLevel = logLevels[entry.level];
-    const entryPlatform = normalizeLogPlatform(entry);
-    const matchesScope = logScopeFilter === "all" || entry.scope === logScopeFilter;
-    const matchesPlatform = logPlatformFilter === "all" || entryPlatform === logPlatformFilter;
-    const matchesCode = logCodeFilter === "all" || entry.code === logCodeFilter;
-    const haystack = [entry.scope, entry.code, entry.message, JSON.stringify(entry.details ?? {})]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
-    const matchesSearch = !logSearch || haystack.includes(logSearch.toLowerCase());
-    return matchesLevel && matchesScope && matchesPlatform && matchesCode && matchesSearch;
-  });
-
-  const latestArtifacts = useMemo(() => {
-    const sourceIds = new Set(
-      artifactIndex.filter((entry) => entry.platform === deepseekPlatform).map((entry) => entry.sourceId),
-    );
-
-    return new Map(
-      Array.from(sourceIds)
-        .map(
-          (sourceId) =>
-            [
-              sourceId,
-              findLatestOpenableArtifactForConversation(artifactIndex, deepseekPlatform, sourceId),
-            ] as const,
-        )
-        .filter((entry): entry is readonly [string, ExportArtifactEntry] => Boolean(entry[1])),
-    );
-  }, [artifactIndex]);
-
-  const openableSourceIds = useMemo(
-    () => new Set(latestArtifacts.keys()),
-    [latestArtifacts],
+  const artifactState = useMemo(
+    () => buildDashboardArtifactState(artifactIndex, selectedPlatform),
+    [artifactIndex, selectedPlatform],
+  );
+  const conversationIndexMap = useMemo(
+    () => buildDashboardConversationIndexMap(conversationIndex, selectedPlatform),
+    [conversationIndex, selectedPlatform],
+  );
+  const filteredQueueItems = useMemo(
+    () =>
+      queueState
+        ? sortDashboardQueueItems(
+            filterDashboardQueueItems(
+              queueState,
+              {
+                queueSearch,
+                queueStatusFilter,
+              },
+              selectedPlatform,
+              conversationIndexMap,
+            ),
+            conversationIndexMap,
+            artifactState.latestArtifacts,
+            queueSortKey,
+            queueSortDirection,
+          )
+        : [],
+    [
+      artifactState.latestArtifacts,
+      conversationIndexMap,
+      queueSearch,
+      queueSortDirection,
+      queueSortKey,
+      queueState,
+      queueStatusFilter,
+      selectedPlatform,
+    ],
   );
 
   if (!queueState || !debugState || !settingsDraft) {
     return <div style={containerStyle}>{t("common.loading")}</div>;
   }
 
-  const deepseekService = queueState.services.deepseek;
-  const platformQueueItems = queueState.items.filter((item) => item.platform === deepseekPlatform);
+  const popupService = queueState.services[popupPlatform];
+  const selectedService = queueState.services[selectedPlatform];
+  const selectedPlatformLabel = platformLabels[selectedPlatform];
+  const missingLocalQueueKeys = filteredQueueItems
+    .filter((item) => !(settingsDraft.downloads.openFileActionsEnabled && artifactState.openableSourceIds.has(item.event.sourceId)))
+    .filter((item) => item.status !== "processing")
+    .map((item) => item.key);
 
-  const filteredQueueItems = platformQueueItems.filter((item) => {
-    const matchesStatus = isStatusFilterMatch(queueStatusFilter, item.status);
-    const haystack = [
-      item.event.title,
-      item.event.sourceId,
-      item.lastError,
-      item.event.url,
-      item.errorCode,
-      item.skipReason,
-    ]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
-    const matchesSearch = !queueSearch || haystack.includes(queueSearch.toLowerCase());
-    return matchesStatus && matchesSearch;
-  });
+  const reExportMissingLocal = async () => {
+    for (const key of missingLocalQueueKeys) {
+      await forceExportQueueItem(key);
+    }
+    await processQueue();
+  };
 
   const handleOpenLatest = (sourceId: string) => {
     setActionError(null);
-    const artifact = latestArtifacts.get(sourceId);
+    const artifact = artifactState.latestArtifacts.get(sourceId);
     if (!artifact || typeof artifact.markdownDownloadId !== "number") {
       setActionError("No local markdown artifact was found for this conversation.");
       return;
     }
-    void openLatestArtifact(deepseekPlatform, sourceId).catch((error) => {
+    void openLatestArtifact(selectedPlatform, sourceId).catch((error) => {
       setActionError(error instanceof Error ? error.message : "Failed to open latest markdown.");
     });
   };
 
   const handleShowFolder = (sourceId: string) => {
     setActionError(null);
-    const artifact = latestArtifacts.get(sourceId);
+    const artifact = artifactState.latestArtifacts.get(sourceId);
     if (!artifact || typeof artifact.markdownDownloadId !== "number") {
       setActionError("No local markdown artifact was found for this conversation.");
       return;
     }
-    void showArtifactFolder(deepseekPlatform, sourceId).catch((error) => {
+    void showArtifactFolder(selectedPlatform, sourceId).catch((error) => {
       setActionError(error instanceof Error ? error.message : "Failed to show export folder.");
     });
   };
 
   const popupSummary = (
-    <div style={{ ...containerStyle, minWidth: 380 }}>
+    <div style={{ ...containerStyle, minWidth: 520, maxWidth: 620, background: "#f3f4f6" }}>
       {actionError ? (
         <div style={{ marginBottom: 12, borderRadius: 12, background: "#fef2f2", border: "1px solid #fecaca", color: "#991b1b", padding: "10px 12px", fontSize: 12 }}>
           {actionError}
@@ -323,7 +271,7 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
           <div>
             <div style={{ fontSize: 20, fontWeight: 700 }}>{t("popup.title")}</div>
             <div style={{ color: "#4b5563", marginTop: 6, fontSize: 13 }}>
-              {t("overview.status")}: {deepseekService.status}
+              {t("popup.subtitle")}
             </div>
           </div>
           <ActionButton disabled={busy} style={{ background: "#0f766e" }} onClick={() => void openDashboard()}>
@@ -331,30 +279,96 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
           </ActionButton>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginTop: 16 }}>
-          <div>
-            <div style={{ color: "#6b7280", fontSize: 12 }}>{t("overview.pending")}</div>
-            <div style={{ fontSize: 24, fontWeight: 700 }}>{deepseekService.stats.pending}</div>
-          </div>
-          <div>
-            <div style={{ color: "#6b7280", fontSize: 12 }}>{t("overview.workers")}</div>
-            <div style={{ fontSize: 24, fontWeight: 700 }}>{deepseekService.activeWorkers}</div>
-          </div>
-          <div>
-            <div style={{ color: "#6b7280", fontSize: 12 }}>{t("overview.failed")}</div>
-            <div style={{ fontSize: 24, fontWeight: 700 }}>{deepseekService.stats.failed}</div>
-          </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12, marginTop: 16 }}>
+          {dashboardPlatforms.map((platform) => {
+            const service = queueState.services[platform];
+            const label = platformLabels[platform];
+            return (
+              <div
+                key={platform}
+                style={{
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 14,
+                  padding: 12,
+                  background: platform === popupPlatform ? "#eff6ff" : "#f8fafc",
+                  display: "grid",
+                  gap: 8,
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 700 }}>{label}</div>
+                    <div style={{ color: "#475569", fontSize: 12 }}>
+                      {t("overview.status")}: {service.status}
+                    </div>
+                  </div>
+                  <div
+                    style={{
+                      padding: "4px 8px",
+                      borderRadius: 999,
+                      background: service.desiredRunning ? "#dcfce7" : "#e5e7eb",
+                      color: service.desiredRunning ? "#166534" : "#475569",
+                      fontSize: 11,
+                      fontWeight: 700,
+                    }}
+                  >
+                    {service.desiredRunning ? t("popup.running") : t("popup.paused")}
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
+                  {[
+                    [t("overview.pending"), service.stats.pending],
+                    [t("overview.processing"), service.stats.processing],
+                    [t("overview.failed"), service.stats.failed],
+                    [t("overview.discovered"), service.stats.discoveredTotal],
+                  ].map(([metricLabel, metricValue]) => (
+                    <div key={metricLabel} style={{ borderRadius: 10, background: "#ffffff", padding: 8, border: "1px solid #e5e7eb" }}>
+                      <div style={{ color: "#6b7280", fontSize: 11 }}>{metricLabel}</div>
+                      <div style={{ fontSize: 18, fontWeight: 700, marginTop: 4 }}>{metricValue}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ display: "grid", gap: 4, fontSize: 11, color: "#475569" }}>
+                  <div>{t("overview.lastDiscovery")}: {formatTimestamp(service.lastDiscoveryAt)}</div>
+                  <div>{t("overview.lastExport")}: {formatTimestamp(service.lastExportAt)}</div>
+                </div>
+
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  <ActionButton
+                    disabled={busy}
+                    style={{ padding: "6px 10px", fontSize: 12 }}
+                    onClick={() => void runAction(() => resumePlatform(platform))}
+                  >
+                    {t("common.resume")}
+                  </ActionButton>
+                  <ActionButton
+                    disabled={busy}
+                    style={{ background: "#7c2d12", padding: "6px 10px", fontSize: 12 }}
+                    onClick={() => void runAction(() => pausePlatform(platform))}
+                  >
+                    {t("common.pause")}
+                  </ActionButton>
+                  <ActionButton
+                    disabled={busy}
+                    style={{ background: "#0f766e", padding: "6px 10px", fontSize: 12 }}
+                    onClick={() => void runAction(() => runDiscovery(platform))}
+                  >
+                    {t("common.runDiscovery")}
+                  </ActionButton>
+                </div>
+              </div>
+            );
+          })}
         </div>
 
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 16 }}>
-          <ActionButton disabled={busy} onClick={() => void runAction(() => resumePlatform(deepseekPlatform))}>
-            {t("common.resume")}
-          </ActionButton>
-          <ActionButton disabled={busy} style={{ background: "#7c2d12" }} onClick={() => void runAction(() => pausePlatform(deepseekPlatform))}>
-            {t("common.pause")}
-          </ActionButton>
           <ActionButton disabled={busy} style={{ background: "#1d4ed8" }} onClick={() => void runAction(() => processQueue())}>
             {t("common.processQueue")}
+          </ActionButton>
+          <ActionButton disabled={busy} style={{ background: "#475569" }} onClick={() => void refresh()}>
+            {t("common.refresh")}
           </ActionButton>
         </div>
       </div>
@@ -395,6 +409,18 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
           </div>
 
           <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
+            {dashboardPlatforms.map((platform) => (
+              <ActionButton
+                key={platform}
+                style={{ background: selectedPlatform === platform ? "#0f172a" : "#64748b" }}
+                onClick={() => setSelectedPlatform(platform)}
+              >
+                {platformLabels[platform]}
+              </ActionButton>
+            ))}
+          </div>
+
+          <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
             {tabs.map((nextTab) => (
               <ActionButton
                 key={nextTab}
@@ -410,12 +436,13 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
         {tab === "overview" ? (
           <OverviewTab
             busy={busy}
-            service={deepseekService}
+            platformLabel={selectedPlatformLabel}
+            service={selectedService}
             t={t}
-            onResume={() => void runAction(() => resumePlatform(deepseekPlatform))}
-            onPause={() => void runAction(() => pausePlatform(deepseekPlatform))}
-            onRunDiscovery={() => void runAction(() => runDiscovery(deepseekPlatform))}
-            onRunFullDiscovery={() => void runAction(() => runFullBootstrap(deepseekPlatform))}
+            onResume={() => void runAction(() => resumePlatform(selectedPlatform))}
+            onPause={() => void runAction(() => pausePlatform(selectedPlatform))}
+            onRunDiscovery={() => void runAction(() => runDiscovery(selectedPlatform))}
+            onRunFullDiscovery={() => void runAction(() => runFullBootstrap(selectedPlatform))}
             onProcessQueue={() => void runAction(() => processQueue())}
           />
         ) : null}
@@ -424,18 +451,26 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
           <QueueTab
             busy={busy}
             items={filteredQueueItems}
+            conversationIndexMap={conversationIndexMap}
+            latestArtifacts={artifactState.latestArtifacts}
             search={queueSearch}
             statusFilter={queueStatusFilter}
+            sortKey={queueSortKey}
+            sortDirection={queueSortDirection}
             t={t}
             openFileActionsEnabled={settingsDraft.downloads.openFileActionsEnabled}
-            openableSourceIds={openableSourceIds}
+            openableSourceIds={artifactState.openableSourceIds}
             onSearchChange={setQueueSearch}
             onStatusFilterChange={setQueueStatusFilter}
+            onSortKeyChange={setQueueSortKey}
+            onSortDirectionChange={setQueueSortDirection}
             onRetryFailed={() => void runAction(() => retryFailed())}
-            onClearCompleted={() => void runAction(() => clearQueueStatuses(["completed"], deepseekPlatform))}
-            onClearFailed={() => void runAction(() => clearQueueStatuses(["failed", "cancelled", "skipped"], deepseekPlatform))}
-            onPausePlatform={() => void runAction(() => pausePlatform(deepseekPlatform))}
-            onResumePlatform={() => void runAction(() => resumePlatform(deepseekPlatform))}
+            onReExportMissingLocal={() => void runAction(() => reExportMissingLocal())}
+            onClearCompleted={() => void runAction(() => clearQueueStatuses(["completed"], selectedPlatform))}
+            onClearFailed={() => void runAction(() => clearQueueStatuses(["failed", "cancelled", "skipped"], selectedPlatform))}
+            missingLocalCount={missingLocalQueueKeys.length}
+            onPausePlatform={() => void runAction(() => pausePlatform(selectedPlatform))}
+            onResumePlatform={() => void runAction(() => resumePlatform(selectedPlatform))}
             onOpenSource={openSourceUrl}
             onRetryItem={(key) => void runAction(() => retryQueueItem(key))}
             onCancelItem={(key) => void runAction(() => cancelQueueItem(key))}
@@ -453,8 +488,8 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
             logLevels={logLevels}
             logSearch={logSearch}
             logScopeFilter={logScopeFilter}
-            logPlatformFilter={logPlatformFilter}
             logCodeFilter={logCodeFilter}
+            platformLabel={selectedPlatformLabel}
             availableScopes={availableLogScopes}
             availableCodes={availableLogCodes}
             hoveredLogId={hoveredLogId}
@@ -464,7 +499,6 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
             onLevelToggle={(level, checked) => setLogLevels((current) => ({ ...current, [level]: checked }))}
             onLogSearchChange={setLogSearch}
             onScopeFilterChange={setLogScopeFilter}
-            onPlatformFilterChange={setLogPlatformFilter}
             onCodeFilterChange={setLogCodeFilter}
             onRefresh={() => void refresh()}
             onExportLogs={() => void runAction(() => exportLogs())}
@@ -514,13 +548,15 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
           <SettingsTab
             busy={busy}
             locale={locale}
+            platformLabel={selectedPlatformLabel}
+            platformDraft={settingsDraft.platforms[selectedPlatform]}
             settingsDraft={settingsDraft}
             t={t}
             onLocaleChange={(nextLocale) => void applyLocale(nextLocale)}
             onGlobalSettingChange={setGlobalSetting}
             onSchedulerChange={setSchedulerSetting}
             onDownloadsChange={setDownloadsSetting}
-            onDeepSeekChange={setDeepSeekSetting}
+            onPlatformChange={setDeepSeekSetting}
             onCommitGlobalSettings={(patch) => void runAction(() => updateSettings(patch))}
             onCommitDownloads={(patch) =>
               void runAction(() =>
@@ -532,14 +568,14 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
                 }),
               )
             }
-            onCommitDeepSeek={(patch) => void runAction(() => updatePlatformSettings(deepseekPlatform, patch))}
-            onClearDeepSeekRecords={() => void runAction(() => clearPlatformLocalRecords(deepseekPlatform))}
+            onCommitPlatform={(patch) => void runAction(() => updatePlatformSettings(selectedPlatform, patch))}
+            onClearPlatformRecords={() => void runAction(() => clearPlatformLocalRecords(selectedPlatform))}
           />
         ) : null}
 
         <div style={{ color: "#64748b", fontSize: 12 }}>
-          {t("overview.lastDiscovery")}: {formatTimestamp(deepseekService.lastDiscoveryAt)} · {t("overview.lastExport")}:{" "}
-          {formatTimestamp(deepseekService.lastExportAt)}
+          {selectedPlatformLabel} · {t("overview.lastDiscovery")}: {formatTimestamp(selectedService.lastDiscoveryAt)} · {t("overview.lastExport")}:{" "}
+          {formatTimestamp(selectedService.lastExportAt)}
         </div>
       </div>
     </div>

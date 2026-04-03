@@ -5,6 +5,7 @@ import { ActionButton } from "./ActionButton";
 
 interface OverviewTabProps {
   busy: boolean;
+  platformLabel: string;
   service: PlatformServiceState;
   t: (key: MessageKey) => string;
   onResume: () => void;
@@ -29,6 +30,7 @@ function formatTimestamp(value: string | undefined): string {
 
 export function OverviewTab({
   busy,
+  platformLabel,
   service,
   t,
   onResume,
@@ -50,7 +52,7 @@ export function OverviewTab({
     <div style={cardStyle}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
         <div>
-          <div style={{ fontSize: 22, fontWeight: 700 }}>{t("overview.serviceTitle")}</div>
+          <div style={{ fontSize: 22, fontWeight: 700 }}>{platformLabel} {t("overview.serviceTitle")}</div>
           <div style={{ marginTop: 8, color: "#4b5563", fontSize: 14 }}>
             {t("overview.status")}: {service.status}
           </div>

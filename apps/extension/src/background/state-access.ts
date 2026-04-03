@@ -58,6 +58,10 @@ export function mergeSettings(current: ExtensionSettings, patch: Partial<Extensi
         ...current.platforms.gemini,
         ...(patch.platforms?.gemini ?? {}),
       },
+      aistudio: {
+        ...current.platforms.aistudio,
+        ...(patch.platforms?.aistudio ?? {}),
+      },
       deepseek: {
         ...current.platforms.deepseek,
         ...(patch.platforms?.deepseek ?? {}),

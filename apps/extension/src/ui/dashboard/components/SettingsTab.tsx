@@ -3,7 +3,7 @@ import type { ExtensionSettings, PlatformRuntimeConfig, UiLocale } from "@aiexpo
 import type { MessageKey } from "../../i18n/useI18n";
 import { ActionButton } from "./ActionButton";
 
-type DeepSeekNumericField =
+type PlatformNumericField =
   | "maxConcurrency"
   | "minStartIntervalMs"
   | "navigationTimeoutMs"
@@ -17,17 +17,19 @@ type DeepSeekNumericField =
 interface SettingsTabProps {
   busy: boolean;
   locale: UiLocale;
+  platformLabel: string;
+  platformDraft: PlatformRuntimeConfig;
   settingsDraft: ExtensionSettings;
   t: (key: MessageKey) => string;
   onLocaleChange: (locale: UiLocale) => void;
   onGlobalSettingChange: <K extends keyof ExtensionSettings>(key: K, value: ExtensionSettings[K]) => void;
   onSchedulerChange: <K extends keyof ExtensionSettings["scheduler"]>(key: K, value: ExtensionSettings["scheduler"][K]) => void;
   onDownloadsChange: <K extends keyof ExtensionSettings["downloads"]>(key: K, value: ExtensionSettings["downloads"][K]) => void;
-  onDeepSeekChange: <K extends keyof PlatformRuntimeConfig>(key: K, value: PlatformRuntimeConfig[K]) => void;
+  onPlatformChange: <K extends keyof PlatformRuntimeConfig>(key: K, value: PlatformRuntimeConfig[K]) => void;
   onCommitGlobalSettings: (patch: Partial<ExtensionSettings>) => void;
   onCommitDownloads: (patch: Partial<ExtensionSettings["downloads"]>) => void;
-  onCommitDeepSeek: (patch: Partial<PlatformRuntimeConfig>) => void;
-  onClearDeepSeekRecords: () => void;
+  onCommitPlatform: (patch: Partial<PlatformRuntimeConfig>) => void;
+  onClearPlatformRecords: () => void;
 }
 
 const cardStyle: CSSProperties = {
@@ -50,20 +52,21 @@ const inputStyle: CSSProperties = {
 export function SettingsTab({
   busy,
   locale,
+  platformLabel,
+  platformDraft,
   settingsDraft,
   t,
   onLocaleChange,
   onGlobalSettingChange,
   onSchedulerChange,
   onDownloadsChange,
-  onDeepSeekChange,
+  onPlatformChange,
   onCommitGlobalSettings,
   onCommitDownloads,
-  onCommitDeepSeek,
-  onClearDeepSeekRecords,
+  onCommitPlatform,
+  onClearPlatformRecords,
 }: SettingsTabProps) {
-  const deepseekDraft = settingsDraft.platforms.deepseek;
-  const numericFields: Array<[MessageKey, DeepSeekNumericField]> = [
+  const numericFields: Array<[MessageKey, PlatformNumericField]> = [
     ["settings.maxConcurrency", "maxConcurrency"],
     ["settings.minStartIntervalMs", "minStartIntervalMs"],
     ["settings.navigationTimeoutMs", "navigationTimeoutMs"],
@@ -177,16 +180,16 @@ export function SettingsTab({
       </div>
 
       <div style={cardStyle}>
-        <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 12 }}>{t("settings.deepseekTitle")}</div>
+        <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 12 }}>{platformLabel} {t("settings.platformTitle")}</div>
         <div style={{ display: "grid", gap: 12 }}>
           <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span>{t("settings.serviceEnabled")}</span>
             <input
               type="checkbox"
-              checked={deepseekDraft.enabled}
+              checked={platformDraft.enabled}
               onChange={(event) => {
-                onDeepSeekChange("enabled", event.target.checked);
-                onCommitDeepSeek({ enabled: event.target.checked });
+                onPlatformChange("enabled", event.target.checked);
+                onCommitPlatform({ enabled: event.target.checked });
               }}
             />
           </label>
@@ -194,10 +197,10 @@ export function SettingsTab({
             <span>{t("settings.autoExportEnabled")}</span>
             <input
               type="checkbox"
-              checked={deepseekDraft.autoExportEnabled}
+              checked={platformDraft.autoExportEnabled}
               onChange={(event) => {
-                onDeepSeekChange("autoExportEnabled", event.target.checked);
-                onCommitDeepSeek({ autoExportEnabled: event.target.checked });
+                onPlatformChange("autoExportEnabled", event.target.checked);
+                onCommitPlatform({ autoExportEnabled: event.target.checked });
               }}
             />
           </label>
@@ -205,10 +208,10 @@ export function SettingsTab({
             <span>{t("settings.historyBackfillEnabled")}</span>
             <input
               type="checkbox"
-              checked={deepseekDraft.historyBackfillEnabled}
+              checked={platformDraft.historyBackfillEnabled}
               onChange={(event) => {
-                onDeepSeekChange("historyBackfillEnabled", event.target.checked);
-                onCommitDeepSeek({ historyBackfillEnabled: event.target.checked });
+                onPlatformChange("historyBackfillEnabled", event.target.checked);
+                onCommitPlatform({ historyBackfillEnabled: event.target.checked });
               }}
             />
           </label>
@@ -216,10 +219,10 @@ export function SettingsTab({
             <span>{t("settings.reuseWorkerTabs")}</span>
             <input
               type="checkbox"
-              checked={deepseekDraft.reuseWorkerTabs}
+              checked={platformDraft.reuseWorkerTabs}
               onChange={(event) => {
-                onDeepSeekChange("reuseWorkerTabs", event.target.checked);
-                onCommitDeepSeek({ reuseWorkerTabs: event.target.checked });
+                onPlatformChange("reuseWorkerTabs", event.target.checked);
+                onCommitPlatform({ reuseWorkerTabs: event.target.checked });
               }}
             />
           </label>
@@ -227,10 +230,10 @@ export function SettingsTab({
             <span>{t("settings.bootstrapRequireFullHistory")}</span>
             <input
               type="checkbox"
-              checked={deepseekDraft.bootstrapRequireFullHistory}
+              checked={platformDraft.bootstrapRequireFullHistory}
               onChange={(event) => {
-                onDeepSeekChange("bootstrapRequireFullHistory", event.target.checked);
-                onCommitDeepSeek({ bootstrapRequireFullHistory: event.target.checked });
+                onPlatformChange("bootstrapRequireFullHistory", event.target.checked);
+                onCommitPlatform({ bootstrapRequireFullHistory: event.target.checked });
               }}
             />
           </label>
@@ -240,18 +243,18 @@ export function SettingsTab({
               <input
                 style={inputStyle}
                 type="number"
-                value={String(deepseekDraft[field])}
-                onChange={(event) => onDeepSeekChange(field, Number(event.target.value))}
-                onBlur={() => onCommitDeepSeek({ [field]: Number(deepseekDraft[field]) } as Partial<PlatformRuntimeConfig>)}
+                value={String(platformDraft[field])}
+                onChange={(event) => onPlatformChange(field, Number(event.target.value))}
+                onBlur={() => onCommitPlatform({ [field]: Number(platformDraft[field]) } as Partial<PlatformRuntimeConfig>)}
               />
             </label>
           ))}
           <label style={{ display: "grid", gap: 6 }}>
             <span>{t("settings.apiExtractMode")}</span>
-            <input style={{ ...inputStyle, background: "#f8fafc" }} value={deepseekDraft.apiExtractMode} readOnly />
+            <input style={{ ...inputStyle, background: "#f8fafc" }} value={platformDraft.apiExtractMode} readOnly />
           </label>
-          <ActionButton disabled={busy} style={{ background: "#991b1b", justifySelf: "start" }} onClick={onClearDeepSeekRecords}>
-            {t("settings.clearDeepSeekRecords")}
+          <ActionButton disabled={busy} style={{ background: "#991b1b", justifySelf: "start" }} onClick={onClearPlatformRecords}>
+            {t("settings.clearPlatformRecords")}
           </ActionButton>
         </div>
       </div>

@@ -64,6 +64,25 @@ function createQueueState(): QueueState {
           receiverRetryLimit: 3,
           apiExtractMode: "page_world_first",
         },
+        aistudio: {
+          enabled: false,
+          autoExportEnabled: false,
+          historyBackfillEnabled: false,
+          discoveryMode: "passive_only",
+          maxConcurrency: 1,
+          minStartIntervalMs: 1000,
+          navigationTimeoutMs: 10000,
+          settleDelayMs: 500,
+          discoverySweepIntervalMs: 60000,
+          reuseWorkerTabs: true,
+          bootstrapRequireFullHistory: false,
+          bootstrapWindowMode: "background_tab",
+          discoveryReadyTimeoutMs: 10000,
+          discoveryScrollStableRounds: 2,
+          receiverReadyTimeoutMs: 5000,
+          receiverRetryLimit: 3,
+          apiExtractMode: "page_world_first",
+        },
         deepseek: {
           enabled: true,
           autoExportEnabled: true,
@@ -102,6 +121,14 @@ function createQueueState(): QueueState {
         activeDiscoveryTabs: 0,
         stats: { discoveredTotal: 0, exportedTotal: 0, pending: 0, processing: 0, completed: 0, failed: 0 },
       },
+      aistudio: {
+        platform: "aistudio",
+        status: "paused",
+        desiredRunning: false,
+        activeWorkers: 0,
+        activeDiscoveryTabs: 0,
+        stats: { discoveredTotal: 0, exportedTotal: 0, pending: 0, processing: 0, completed: 0, failed: 0 },
+      },
       deepseek: {
         platform: "deepseek",
         status: "idle",
@@ -121,8 +148,9 @@ function createRouter() {
     extractConversationFromTab: vi.fn(),
     handleTabRemoved: vi.fn().mockResolvedValue(undefined),
     queuePassiveDiscoveryEvent: vi.fn().mockResolvedValue({ total: 1, queued: 1 }),
+    requestPlatformStartupCatchup: vi.fn(),
     requestPlatformTick: vi.fn(),
-    runDeepSeekDiscoverySweep: vi.fn().mockResolvedValue(undefined),
+    runPlatformDiscoverySweep: vi.fn().mockResolvedValue(undefined),
     updatePlatformDesiredRunning: vi.fn().mockResolvedValue(queueState),
   };
 
@@ -180,7 +208,19 @@ describe("background runtime router", () => {
     );
     await Promise.resolve();
 
-    expect(serviceRuntime.runDeepSeekDiscoverySweep).toHaveBeenCalledWith("deepseek", "full-bootstrap");
+    expect(serviceRuntime.runPlatformDiscoverySweep).toHaveBeenCalledWith("deepseek", "full-bootstrap");
+  });
+
+  it("enables google platforms before resume", async () => {
+    const { handler, deps, serviceRuntime } = createRouter();
+
+    await handler(
+      { type: "service-resume", platform: "gemini" },
+      {} as browser.runtime.MessageSender,
+    );
+
+    expect(deps.updateQueueStateWithDerived).toHaveBeenCalled();
+    expect(serviceRuntime.updatePlatformDesiredRunning).toHaveBeenCalledWith("gemini", true);
   });
 
   it("rejects manual export without an active sender tab", async () => {

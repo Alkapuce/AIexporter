@@ -1,5 +1,2 @@
-export const geminiAdapterPlaceholder = {
-  platform: "gemini",
-  status: "planned",
-};
-
+export * from "./adapter";
+export * from "./discovery";

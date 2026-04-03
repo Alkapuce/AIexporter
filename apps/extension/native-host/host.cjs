@@ -115,8 +115,52 @@ function normalizePath(inputPath) {
   return path.normalize(inputPath);
 }
 
+function readRegistryValue(keyPath, valueName) {
+  const result = spawnSync(
+    "reg.exe",
+    ["query", keyPath, "/v", valueName],
+    {
+      encoding: "utf8",
+      windowsHide: true,
+    },
+  );
+
+  if (result.error || result.status !== 0 || !result.stdout) {
+    return null;
+  }
+
+  const line = result.stdout
+    .split(/\r?\n/)
+    .map((entry) => entry.trim())
+    .find((entry) => entry.startsWith(valueName));
+  if (!line) {
+    return null;
+  }
+
+  const parts = line.split(/\s{2,}/).filter(Boolean);
+  return parts[2] || null;
+}
+
+function expandWindowsEnvPath(inputPath) {
+  if (!inputPath) return inputPath;
+  return inputPath.replace(/%([^%]+)%/g, (_, name) => process.env[name] || `%${name}%`);
+}
+
+function getKnownFolderDownloadsDirectory() {
+  const registryValue = readRegistryValue(
+    "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\User Shell Folders",
+    "{374DE290-123F-4565-9164-39C4925E467B}",
+  );
+  if (!registryValue) {
+    return null;
+  }
+
+  return path.normalize(expandWindowsEnvPath(registryValue));
+}
+
 function getDownloadsDirectory() {
   const candidates = [
+    getKnownFolderDownloadsDirectory(),
     process.env.USERPROFILE ? path.join(process.env.USERPROFILE, "Downloads") : null,
     path.join(os.homedir(), "Downloads"),
   ].filter(Boolean);

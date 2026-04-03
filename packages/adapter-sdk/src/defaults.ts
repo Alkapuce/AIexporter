@@ -63,6 +63,17 @@ export const DEFAULT_EXTENSION_SETTINGS: ExtensionSettings = {
       historyBackfillEnabled: false,
       discoveryMode: "passive_only",
       bootstrapRequireFullHistory: false,
+      discoveryReadyTimeoutMs: 60_000,
+    }),
+    aistudio: createDefaultPlatformRuntimeConfig({
+      enabled: false,
+      autoExportEnabled: false,
+      historyBackfillEnabled: false,
+      discoveryMode: "passive_only",
+      bootstrapRequireFullHistory: false,
+      maxConcurrency: 1,
+      discoverySweepIntervalMs: 15 * 60 * 1_000,
+      discoveryReadyTimeoutMs: 45_000,
     }),
     deepseek: createDefaultPlatformRuntimeConfig({
       enabled: true,
@@ -102,6 +113,7 @@ export const DEFAULT_QUEUE_STATE: QueueState = {
   services: {
     chatgpt: createDefaultPlatformServiceState("chatgpt"),
     gemini: createDefaultPlatformServiceState("gemini"),
+    aistudio: createDefaultPlatformServiceState("aistudio"),
     deepseek: createDefaultPlatformServiceState("deepseek"),
   },
   activeWorkers: [],
