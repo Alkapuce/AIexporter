@@ -1,18 +1,39 @@
 const AIEXPORTER_NATIVE_HOST = "com.aiexporter.shell";
 
-type NativeHostAction = "ping" | "open-file" | "show-folder" | "relocate-file";
+type NativeHostAction =
+  | "ping"
+  | "open-file"
+  | "show-folder"
+  | "relocate-file"
+  | "move-path"
+  | "recycle-path"
+  | "path-exists"
+  | "write-file"
+  | "pick-folder"
+  | "list-files"
+  | "read-file"
+  | "resolve-export-root"
+  | "prune-old-files";
 
 interface NativeHostRequest {
   action: NativeHostAction;
   path?: string;
   sourcePath?: string;
   relativePath?: string;
+  rootPath?: string;
+  content?: string;
+  encoding?: "utf8" | "base64";
+  pattern?: string;
+  recursive?: boolean;
+  olderThanDays?: number;
 }
 
 interface NativeHostResponse {
   ok: boolean;
   action?: NativeHostAction;
   path?: string;
+  paths?: string[];
+  content?: string;
   error?: string;
 }
 
@@ -75,6 +96,60 @@ export function showFolderWithNativeHost(path: string): Promise<NativeHostRespon
 export function relocateFileWithNativeHost(
   sourcePath: string,
   relativePath: string,
+  rootPath?: string,
 ): Promise<NativeHostResponse> {
-  return sendNativeMessage({ action: "relocate-file", sourcePath, relativePath });
+  return sendNativeMessage({ action: "relocate-file", sourcePath, relativePath, rootPath });
+}
+
+export function movePathWithNativeHost(sourcePath: string, path: string): Promise<NativeHostResponse> {
+  return sendNativeMessage({ action: "move-path", sourcePath, path });
+}
+
+export function recyclePathWithNativeHost(path: string): Promise<NativeHostResponse> {
+  return sendNativeMessage({ action: "recycle-path", path });
+}
+
+export function checkPathExistsWithNativeHost(path: string): Promise<NativeHostResponse> {
+  return sendNativeMessage({ action: "path-exists", path });
+}
+
+export function writeFileWithNativeHost(
+  relativePath: string,
+  content: string,
+  encoding: "utf8" | "base64" = "utf8",
+  rootPath?: string,
+): Promise<NativeHostResponse> {
+  return sendNativeMessage({ action: "write-file", relativePath, content, encoding, rootPath });
+}
+
+export function pickFolderWithNativeHost(path?: string): Promise<NativeHostResponse> {
+  return sendNativeMessage({ action: "pick-folder", path });
+}
+
+export function listFilesWithNativeHost(
+  path: string,
+  pattern = "*",
+  recursive = true,
+): Promise<NativeHostResponse> {
+  return sendNativeMessage({ action: "list-files", path, pattern, recursive });
+}
+
+export function readFileWithNativeHost(
+  path: string,
+  encoding: "utf8" | "base64" = "utf8",
+): Promise<NativeHostResponse> {
+  return sendNativeMessage({ action: "read-file", path, encoding });
+}
+
+export function resolveExportRootWithNativeHost(rootPath?: string): Promise<NativeHostResponse> {
+  return sendNativeMessage({ action: "resolve-export-root", rootPath });
+}
+
+export function pruneOldFilesWithNativeHost(
+  path: string,
+  pattern = "*",
+  recursive = true,
+  olderThanDays = 7,
+): Promise<NativeHostResponse> {
+  return sendNativeMessage({ action: "prune-old-files", path, pattern, recursive, olderThanDays });
 }

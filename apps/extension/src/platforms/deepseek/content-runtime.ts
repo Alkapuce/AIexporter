@@ -38,6 +38,54 @@ export function shouldHandleDeepSeekPassiveDiscovery({
   );
 }
 
+function installUrlChangeMonitor(onChange: (url: string) => void): () => void {
+  let lastUrl = window.location.href;
+  let disposed = false;
+  const notifyIfChanged = () => {
+    if (disposed) return;
+    const nextUrl = window.location.href;
+    if (nextUrl === lastUrl) return;
+    lastUrl = nextUrl;
+    onChange(nextUrl);
+  };
+
+  const historyRef = window.history as History & {
+    __aiexporterOriginalPushState?: History["pushState"];
+    __aiexporterOriginalReplaceState?: History["replaceState"];
+  };
+
+  if (!historyRef.__aiexporterOriginalPushState) {
+    historyRef.__aiexporterOriginalPushState = historyRef.pushState.bind(historyRef);
+    historyRef.pushState = ((...args: Parameters<History["pushState"]>) => {
+      const result = historyRef.__aiexporterOriginalPushState!(...args);
+      queueMicrotask(notifyIfChanged);
+      return result;
+    }) as History["pushState"];
+  }
+
+  if (!historyRef.__aiexporterOriginalReplaceState) {
+    historyRef.__aiexporterOriginalReplaceState = historyRef.replaceState.bind(historyRef);
+    historyRef.replaceState = ((...args: Parameters<History["replaceState"]>) => {
+      const result = historyRef.__aiexporterOriginalReplaceState!(...args);
+      queueMicrotask(notifyIfChanged);
+      return result;
+    }) as History["replaceState"];
+  }
+
+  const onPopState = () => notifyIfChanged();
+  const onHashChange = () => notifyIfChanged();
+  const interval = window.setInterval(notifyIfChanged, 15_000);
+  window.addEventListener("popstate", onPopState);
+  window.addEventListener("hashchange", onHashChange);
+
+  return () => {
+    disposed = true;
+    window.clearInterval(interval);
+    window.removeEventListener("popstate", onPopState);
+    window.removeEventListener("hashchange", onHashChange);
+  };
+}
+
 async function queueCurrentConversation(log: RuntimeLogger): Promise<void> {
   const sourceId = extractSessionIdFromUrl(window.location.href);
   if (!sourceId) return;
@@ -207,15 +255,11 @@ export async function mountDeepSeekContentRuntime(log: RuntimeLogger): Promise<v
     await queueCurrentConversation(log);
   }
 
-  let lastUrl = window.location.href;
-  window.setInterval(() => {
+  installUrlChangeMonitor((nextUrl) => {
     if (isDeepSeekWorkerPageContext()) return;
-    if (window.location.href !== lastUrl) {
-      lastUrl = window.location.href;
-      void log("debug", "Detected DeepSeek URL change.", {
-        url: lastUrl,
-      });
-      void queueCurrentConversation(log);
-    }
-  }, 1_200);
+    void log("debug", "Detected DeepSeek URL change.", {
+      url: nextUrl,
+    });
+    void queueCurrentConversation(log);
+  });
 }

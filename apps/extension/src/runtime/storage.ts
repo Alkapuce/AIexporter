@@ -61,6 +61,7 @@ function normalizePlatformConfig(raw: Partial<PlatformRuntimeConfig> | undefined
   return {
     ...fallback,
     ...(raw ?? {}),
+    bootstrapWindowMode: "background_tab",
   };
 }
 
@@ -77,6 +78,13 @@ function normalizeService(raw: Partial<PlatformServiceState> | undefined, fallba
 
 function normalizeState(raw: unknown): QueueState {
   const candidate = raw as Partial<QueueState> | undefined;
+  const exportRootPath =
+    typeof candidate?.settings?.downloads?.exportRootPath === "string" &&
+    candidate.settings.downloads.exportRootPath.trim().length > 0
+      ? candidate.settings.downloads.exportRootPath.trim()
+      : undefined;
+  const revisionHistoryMode = candidate?.settings?.downloads?.revisionHistoryMode;
+  const archiveRetentionDays = candidate?.settings?.downloads?.archiveRetentionDays;
   return {
     items: Array.isArray(candidate?.items)
       ? (candidate.items as ExportQueueItem[]).map((item) => ({
@@ -101,6 +109,17 @@ function normalizeState(raw: unknown): QueueState {
       downloads: {
         ...DEFAULT_EXTENSION_SETTINGS.downloads,
         ...(candidate?.settings?.downloads ?? {}),
+        exportRootPath,
+        revisionHistoryMode:
+          revisionHistoryMode === "disabled" ||
+          revisionHistoryMode === "recycle_previous" ||
+          revisionHistoryMode === "archive_then_recycle"
+            ? revisionHistoryMode
+            : DEFAULT_EXTENSION_SETTINGS.downloads.revisionHistoryMode,
+        archiveRetentionDays:
+          typeof archiveRetentionDays === "number" && Number.isFinite(archiveRetentionDays)
+            ? Math.max(1, Math.floor(archiveRetentionDays))
+            : DEFAULT_EXTENSION_SETTINGS.downloads.archiveRetentionDays,
       },
       platforms: {
         chatgpt: normalizePlatformConfig(candidate?.settings?.platforms?.chatgpt, DEFAULT_EXTENSION_SETTINGS.platforms.chatgpt),
@@ -126,7 +145,12 @@ function normalizeDebugState(raw: unknown): DebugState {
 }
 
 function normalizeConversationIndex(raw: unknown): ConversationIndexEntry[] {
-  return Array.isArray(raw) ? (raw as ConversationIndexEntry[]) : DEFAULT_CONVERSATION_INDEX;
+  if (!Array.isArray(raw)) return DEFAULT_CONVERSATION_INDEX;
+  return (raw as Array<ConversationIndexEntry & { latestExporterVersion?: string }>).map((entry) => ({
+    ...entry,
+    latestExportCompatibilityVersion:
+      entry.latestExportCompatibilityVersion ?? entry.latestExporterVersion,
+  }));
 }
 
 function normalizeArtifactIndex(raw: unknown): ExportArtifactEntry[] {

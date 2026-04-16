@@ -2,6 +2,9 @@ import type { ConversationBundle } from "@aiexporter/core-schema";
 import type { BridgeNetworkPayload } from "./types";
 
 const encoder = new TextEncoder();
+// Only bump this value when exported artifacts need a full re-export.
+export const AIEXPORTER_EXPORT_COMPATIBILITY_VERSION = "2026-04-15.2";
+export const AIEXPORTER_EXPORT_SCHEMA_VERSION = AIEXPORTER_EXPORT_COMPATIBILITY_VERSION;
 
 async function toSha256Hex(value: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", encoder.encode(value));
@@ -14,7 +17,12 @@ export async function buildDiscoveryFingerprint(
   platform: string,
   payload: BridgeNetworkPayload,
 ): Promise<string> {
-  return toSha256Hex([platform, payload.sourceId, payload.sourceUpdatedAt ?? ""].join("::"));
+  return toSha256Hex([
+    AIEXPORTER_EXPORT_SCHEMA_VERSION,
+    platform,
+    payload.sourceId,
+    payload.sourceUpdatedAt ?? "",
+  ].join("::"));
 }
 
 export async function buildBundleRevision(bundle: ConversationBundle): Promise<string> {
@@ -23,6 +31,7 @@ export async function buildBundleRevision(bundle: ConversationBundle): Promise<s
     .join("\n");
   return toSha256Hex(
     [
+      AIEXPORTER_EXPORT_SCHEMA_VERSION,
       bundle.platform,
       bundle.sourceId,
       bundle.url,

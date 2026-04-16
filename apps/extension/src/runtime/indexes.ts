@@ -1,4 +1,4 @@
-import type { ConversationBundle, DiscoveryEvent } from "@aiexporter/core-schema";
+import { resolveBundleTitle, type ConversationBundle, type DiscoveryEvent } from "@aiexporter/core-schema";
 import type { ConversationIndexEntry, ExportArtifactEntry } from "@aiexporter/adapter-sdk";
 
 export function upsertConversationIndexEntry(
@@ -63,18 +63,26 @@ export function markConversationIndexExportResult(
   bundle: ConversationBundle,
   revision: string,
   exportState: ConversationIndexEntry["exportState"],
+  exportCompatibilityVersion?: string,
 ): ConversationIndexEntry[] {
   return entries.map((entry) =>
     entry.platform === bundle.platform && entry.sourceId === bundle.sourceId
-      ? {
-          ...entry,
-          title: bundle.title ?? entry.title,
-          url: bundle.url,
-          latestSourceUpdatedAt: bundle.sourceUpdatedAt ?? entry.latestSourceUpdatedAt,
-          latestExportRevision: exportState === "exported" ? revision : entry.latestExportRevision,
-          exportState,
-          lastSeenAt: new Date().toISOString(),
-        }
+      ? (() => {
+          const resolvedTitle = resolveBundleTitle(bundle, entry.title);
+          return {
+            ...entry,
+            title: resolvedTitle.title ?? entry.title,
+            url: bundle.url,
+            latestSourceUpdatedAt: bundle.sourceUpdatedAt ?? entry.latestSourceUpdatedAt,
+            latestExportRevision: exportState === "exported" ? revision : entry.latestExportRevision,
+            latestExportCompatibilityVersion:
+              exportState === "exported"
+                ? exportCompatibilityVersion ?? entry.latestExportCompatibilityVersion
+                : entry.latestExportCompatibilityVersion,
+            exportState,
+            lastSeenAt: new Date().toISOString(),
+          };
+        })()
       : entry,
   );
 }

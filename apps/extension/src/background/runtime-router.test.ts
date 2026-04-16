@@ -41,6 +41,10 @@ function createQueueState(): QueueState {
           bootstrapWindowMode: "background_tab",
           discoveryReadyTimeoutMs: 10000,
           discoveryScrollStableRounds: 2,
+          discoveryDomMaxCycles: 24,
+          discoveryDomPostScrollWaitMs: 5000,
+          discoveryDomStableCycles: 3,
+          discoveryDomScrollBottomAttempts: 4,
           receiverReadyTimeoutMs: 5000,
           receiverRetryLimit: 3,
           apiExtractMode: "page_world_first",
@@ -60,6 +64,10 @@ function createQueueState(): QueueState {
           bootstrapWindowMode: "background_tab",
           discoveryReadyTimeoutMs: 10000,
           discoveryScrollStableRounds: 2,
+          discoveryDomMaxCycles: 200,
+          discoveryDomPostScrollWaitMs: 5000,
+          discoveryDomStableCycles: 3,
+          discoveryDomScrollBottomAttempts: 4,
           receiverReadyTimeoutMs: 5000,
           receiverRetryLimit: 3,
           apiExtractMode: "page_world_first",
@@ -79,6 +87,10 @@ function createQueueState(): QueueState {
           bootstrapWindowMode: "background_tab",
           discoveryReadyTimeoutMs: 10000,
           discoveryScrollStableRounds: 2,
+          discoveryDomMaxCycles: 24,
+          discoveryDomPostScrollWaitMs: 5000,
+          discoveryDomStableCycles: 3,
+          discoveryDomScrollBottomAttempts: 4,
           receiverReadyTimeoutMs: 5000,
           receiverRetryLimit: 3,
           apiExtractMode: "page_world_first",
@@ -98,6 +110,10 @@ function createQueueState(): QueueState {
           bootstrapWindowMode: "background_tab",
           discoveryReadyTimeoutMs: 10000,
           discoveryScrollStableRounds: 2,
+          discoveryDomMaxCycles: 24,
+          discoveryDomPostScrollWaitMs: 5000,
+          discoveryDomStableCycles: 3,
+          discoveryDomScrollBottomAttempts: 4,
           receiverReadyTimeoutMs: 5000,
           receiverRetryLimit: 3,
           apiExtractMode: "page_world_first",
@@ -157,6 +173,7 @@ function createRouter() {
   const deps = {
     clearDebugState: vi.fn().mockResolvedValue({ logs: [] }),
     downloadTextAsset: vi.fn().mockResolvedValue({ downloadId: 1 }),
+    getQueueStateSnapshot: vi.fn().mockResolvedValue(queueState),
     loadDebugState: vi.fn().mockResolvedValue({ logs: [] }),
     loadQueueState: vi.fn().mockResolvedValue(queueState),
     openLatestArtifact: vi.fn().mockResolvedValue({ revision: "rev-1" }),
@@ -183,7 +200,7 @@ describe("background runtime router", () => {
     const { handler, queueState, deps } = createRouter();
 
     await expect(handler({ type: "queue-state-request" }, {} as browser.runtime.MessageSender)).resolves.toBe(queueState);
-    expect(deps.loadQueueState).toHaveBeenCalledTimes(1);
+    expect(deps.getQueueStateSnapshot).toHaveBeenCalledTimes(1);
   });
 
   it("delegates artifact-open-latest to artifact persistence helpers", async () => {

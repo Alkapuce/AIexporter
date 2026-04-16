@@ -17,8 +17,21 @@ export interface DashboardStateSnapshot {
   conversationIndex: ConversationIndexEntry[];
 }
 
-async function sendMessage<T>(message: RuntimeMessage): Promise<T> {
-  return (await browser.runtime.sendMessage(message)) as T;
+async function sendMessage<T>(message: RuntimeMessage, timeoutMs = 10_000): Promise<T> {
+  const response = await Promise.race([
+    browser.runtime.sendMessage(message),
+    new Promise<never>((_, reject) => {
+      window.setTimeout(() => reject(new Error(`Background request timed out: ${message.type}`)), timeoutMs);
+    }),
+  ]);
+  if (response && typeof response === "object" && "__aiexporterError" in (response as Record<string, unknown>)) {
+    throw new Error(
+      typeof (response as { __aiexporterError?: unknown }).__aiexporterError === "string"
+        ? ((response as { __aiexporterError?: string }).__aiexporterError as string)
+        : "Background request failed.",
+    );
+  }
+  return response as T;
 }
 
 export async function fetchDashboardState(): Promise<DashboardStateSnapshot> {
@@ -115,6 +128,18 @@ export function clearLogs(): Promise<DebugState> {
 
 export function exportLogs(): Promise<unknown> {
   return sendMessage({ type: "dashboard-log-export-request" });
+}
+
+export function pickExportRoot(): Promise<{ path?: string }> {
+  return sendMessage({ type: "downloads-pick-export-root" });
+}
+
+export function resolveExportRoot(): Promise<{ path?: string }> {
+  return sendMessage({ type: "downloads-resolve-export-root" });
+}
+
+export function syncArtifacts(platform?: SourcePlatform): Promise<unknown> {
+  return sendMessage({ type: "artifact-sync-run", platform });
 }
 
 export function openSourceUrl(url: string): void {

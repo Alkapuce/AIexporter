@@ -17,6 +17,7 @@ export function rebuildPlatformServiceState(
 ): PlatformServiceState {
   const platformItems = queueState.items.filter((item) => item.platform === service.platform);
   const platformIndex = conversationIndex.filter((entry) => entry.platform === service.platform);
+  const queuedSourceIds = new Set(platformItems.map((item) => item.event.sourceId).filter(Boolean));
 
   const pending = platformItems.filter((item) => item.status === "pending").length;
   const processing = platformItems.filter((item) => item.status === "processing").length;
@@ -42,7 +43,7 @@ export function rebuildPlatformServiceState(
     status: nextStatus,
     activeWorkers: countPlatformWorkers(queueState.activeWorkers, service.platform),
     stats: {
-      discoveredTotal: platformIndex.length,
+      discoveredTotal: Math.max(platformIndex.length, queuedSourceIds.size),
       exportedTotal,
       pending,
       processing,

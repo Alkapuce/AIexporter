@@ -11,29 +11,35 @@ export function useDashboardSnapshot(mode: DashboardMode) {
   const [artifactIndex, setArtifactIndex] = useState<ExportArtifactEntry[]>([]);
   const [conversationIndex, setConversationIndex] = useState<ConversationIndexEntry[]>([]);
   const [settingsDraft, setSettingsDraft] = useState<ExtensionSettings | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const committedSettingsRef = useRef<ExtensionSettings | null>(null);
 
   const refresh = useCallback(async () => {
-    const snapshot = await fetchDashboardState();
-    const nextCommittedSettings = cloneDashboardSettings(snapshot.queueState.settings);
-    setQueueState(snapshot.queueState);
-    setDebugState(snapshot.debugState);
-    setArtifactIndex(snapshot.artifactIndex);
-    setConversationIndex(snapshot.conversationIndex);
-    setSettingsDraft((current) => {
-      const previousCommitted = committedSettingsRef.current;
-      committedSettingsRef.current = nextCommittedSettings;
+    try {
+      const snapshot = await fetchDashboardState();
+      const nextCommittedSettings = cloneDashboardSettings(snapshot.queueState.settings);
+      setQueueState(snapshot.queueState);
+      setDebugState(snapshot.debugState);
+      setArtifactIndex(snapshot.artifactIndex);
+      setConversationIndex(snapshot.conversationIndex);
+      setLoadError(null);
+      setSettingsDraft((current) => {
+        const previousCommitted = committedSettingsRef.current;
+        committedSettingsRef.current = nextCommittedSettings;
 
-      if (!current) {
-        return nextCommittedSettings;
-      }
+        if (!current) {
+          return nextCommittedSettings;
+        }
 
-      if (previousCommitted && !areDashboardSettingsEqual(current, previousCommitted)) {
-        return current;
-      }
+        if (previousCommitted && !areDashboardSettingsEqual(current, previousCommitted)) {
+          return current;
+        }
 
-      return areDashboardSettingsEqual(current, nextCommittedSettings) ? current : nextCommittedSettings;
-    });
+        return areDashboardSettingsEqual(current, nextCommittedSettings) ? current : nextCommittedSettings;
+      });
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "Failed to load dashboard state.");
+    }
   }, []);
 
   useEffect(() => {
@@ -51,6 +57,7 @@ export function useDashboardSnapshot(mode: DashboardMode) {
     conversationIndex,
     settingsDraft,
     setSettingsDraft,
+    loadError,
     refresh,
   };
 }

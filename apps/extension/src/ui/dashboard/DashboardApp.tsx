@@ -13,18 +13,22 @@ import {
   openLatestArtifact,
   openSourceUrl,
   pausePlatform,
+  pickExportRoot,
   processQueue,
   removeQueueItem,
+  resolveExportRoot,
   resumePlatform,
   retryFailed,
   retryQueueItem,
   runDiscovery,
   runFullBootstrap,
   showArtifactFolder,
+  syncArtifacts,
   updatePlatformSettings,
   updateSettings,
 } from "../services/dashboard-api";
 import {
+  buildRelatedDashboardLogs,
   buildAvailableLogCodes,
   buildAvailableLogScopes,
   buildDashboardArtifactState,
@@ -77,7 +81,7 @@ function formatTimestamp(value: string | undefined): string {
 }
 
 export function DashboardApp({ mode }: { mode: DashboardMode }) {
-  const { queueState, debugState, artifactIndex, conversationIndex, settingsDraft, setSettingsDraft, refresh } =
+  const { queueState, debugState, artifactIndex, conversationIndex, settingsDraft, setSettingsDraft, loadError, refresh } =
     useDashboardSnapshot(mode);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -87,6 +91,8 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
   const [queueStatusFilter, setQueueStatusFilter] = useState("all");
   const [queueSortKey, setQueueSortKey] = useState<DashboardQueueSortKey>("updatedAt");
   const [queueSortDirection, setQueueSortDirection] = useState<DashboardSortDirection>("desc");
+  const [queuePage, setQueuePage] = useState(1);
+  const [queuePageSize, setQueuePageSize] = useState(100);
   const [logLevels, setLogLevels] = useState<Record<DebugLogLevel, boolean>>({
     debug: true,
     info: true,
@@ -99,6 +105,7 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
   const [hoveredLogId, setHoveredLogId] = useState<string | null>(null);
   const [selectedLogId, setSelectedLogId] = useState<string | null>(null);
   const [copiedDetails, setCopiedDetails] = useState(false);
+  const [resolvedExportRoot, setResolvedExportRoot] = useState<string | undefined>(undefined);
 
   const locale: UiLocale = settingsDraft?.uiLocale ?? queueState?.settings.uiLocale ?? "zh-CN";
   const { t } = useI18n(locale);
@@ -153,6 +160,13 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
     setSelectedLogId(null);
   }, [selectedPlatform]);
 
+  useEffect(() => {
+    if (!settingsDraft) return;
+    void resolveExportRoot()
+      .then((result) => setResolvedExportRoot(result.path))
+      .catch(() => setResolvedExportRoot(settingsDraft.downloads.exportRootPath));
+  }, [settingsDraft?.downloads.exportRootPath]);
+
   const platformLogs = useMemo(
     () =>
       filterDashboardLogs(debugLogs, {
@@ -177,6 +191,13 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
       }),
     [debugLogs, logCodeFilter, logLevels, logScopeFilter, logSearch, selectedPlatform],
   );
+  const relatedLogs = useMemo(() => {
+    const activeLog =
+      filteredLogs.find((entry) => entry.id === selectedLogId) ??
+      filteredLogs.find((entry) => entry.id === hoveredLogId) ??
+      null;
+    return buildRelatedDashboardLogs(platformLogs, activeLog);
+  }, [filteredLogs, hoveredLogId, platformLogs, selectedLogId]);
   const artifactState = useMemo(
     () => buildDashboardArtifactState(artifactIndex, selectedPlatform),
     [artifactIndex, selectedPlatform],
@@ -215,9 +236,44 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
       selectedPlatform,
     ],
   );
+  const queueTotalPages = Math.max(1, Math.ceil(filteredQueueItems.length / queuePageSize));
+  const pagedQueueItems = useMemo(() => {
+    const safePage = Math.min(queuePage, queueTotalPages);
+    const startIndex = (safePage - 1) * queuePageSize;
+    return filteredQueueItems.slice(startIndex, startIndex + queuePageSize);
+  }, [filteredQueueItems, queuePage, queuePageSize, queueTotalPages]);
+
+  useEffect(() => {
+    setQueuePage(1);
+  }, [selectedPlatform, queueSearch, queueStatusFilter, queueSortKey, queueSortDirection, queuePageSize]);
+
+  useEffect(() => {
+    if (queuePage > queueTotalPages) {
+      setQueuePage(queueTotalPages);
+    }
+  }, [queuePage, queueTotalPages]);
 
   if (!queueState || !debugState || !settingsDraft) {
-    return <div style={containerStyle}>{t("common.loading")}</div>;
+    return (
+      <div style={containerStyle}>
+        {loadError ? (
+          <div
+            style={{
+              marginBottom: 12,
+              borderRadius: 12,
+              background: "#fef2f2",
+              border: "1px solid #fecaca",
+              color: "#991b1b",
+              padding: "10px 12px",
+              fontSize: 12,
+            }}
+          >
+            {loadError}
+          </div>
+        ) : null}
+        {t("common.loading")}
+      </div>
+    );
   }
 
   const popupService = queueState.services[popupPlatform];
@@ -238,7 +294,7 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
   const handleOpenLatest = (sourceId: string) => {
     setActionError(null);
     const artifact = artifactState.latestArtifacts.get(sourceId);
-    if (!artifact || typeof artifact.markdownDownloadId !== "number") {
+    if (!artifact || (!artifact.markdownFilename && typeof artifact.markdownDownloadId !== "number")) {
       setActionError("No local markdown artifact was found for this conversation.");
       return;
     }
@@ -250,7 +306,7 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
   const handleShowFolder = (sourceId: string) => {
     setActionError(null);
     const artifact = artifactState.latestArtifacts.get(sourceId);
-    if (!artifact || typeof artifact.markdownDownloadId !== "number") {
+    if (!artifact || (!artifact.markdownFilename && typeof artifact.markdownDownloadId !== "number")) {
       setActionError("No local markdown artifact was found for this conversation.");
       return;
     }
@@ -450,7 +506,7 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
         {tab === "queue" ? (
           <QueueTab
             busy={busy}
-            items={filteredQueueItems}
+            items={pagedQueueItems}
             conversationIndexMap={conversationIndexMap}
             latestArtifacts={artifactState.latestArtifacts}
             search={queueSearch}
@@ -478,6 +534,12 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
             onForceExport={(key) => void runAction(() => forceExportQueueItem(key))}
             onOpenLatest={handleOpenLatest}
             onShowFolder={handleShowFolder}
+            page={queuePage}
+            totalPages={queueTotalPages}
+            pageSize={queuePageSize}
+            totalItems={filteredQueueItems.length}
+            onPageChange={setQueuePage}
+            onPageSizeChange={setQueuePageSize}
           />
         ) : null}
 
@@ -485,6 +547,7 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
           <LogsTab
             busy={busy}
             logs={filteredLogs}
+            relatedLogs={relatedLogs}
             logLevels={logLevels}
             logSearch={logSearch}
             logScopeFilter={logScopeFilter}
@@ -548,9 +611,11 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
           <SettingsTab
             busy={busy}
             locale={locale}
+            platformKey={selectedPlatform}
             platformLabel={selectedPlatformLabel}
             platformDraft={settingsDraft.platforms[selectedPlatform]}
             settingsDraft={settingsDraft}
+            resolvedExportRoot={resolvedExportRoot}
             t={t}
             onLocaleChange={(nextLocale) => void applyLocale(nextLocale)}
             onGlobalSettingChange={setGlobalSetting}
@@ -569,6 +634,22 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
               )
             }
             onCommitPlatform={(patch) => void runAction(() => updatePlatformSettings(selectedPlatform, patch))}
+            onPickExportRoot={() =>
+              void runAction(async () => {
+                const result = await pickExportRoot();
+                if (result.path) {
+                  setDownloadsSetting("exportRootPath", result.path);
+                  await updateSettings({
+                    downloads: {
+                      ...settingsDraft.downloads,
+                      exportRootPath: result.path,
+                    },
+                  });
+                  setResolvedExportRoot(result.path);
+                }
+              })
+            }
+            onSyncArtifacts={() => void runAction(() => syncArtifacts(selectedPlatform))}
             onClearPlatformRecords={() => void runAction(() => clearPlatformLocalRecords(selectedPlatform))}
           />
         ) : null}

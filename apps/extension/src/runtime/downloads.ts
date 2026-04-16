@@ -2,11 +2,19 @@ function toDataUrl(content: string, mimeType: string): string {
   return `data:${mimeType};charset=utf-8,${encodeURIComponent(content)}`;
 }
 
+function toBase64DataUrl(contentBase64: string, mimeType: string): string {
+  return `data:${mimeType};base64,${contentBase64}`;
+}
+
 import { pingNativeHost, relocateFileWithNativeHost } from "./native-host";
 
 export interface DownloadedAsset {
   downloadId: number;
   filename: string;
+}
+
+interface DownloadTextAssetOptions {
+  forceFresh?: boolean;
 }
 
 interface DownloadChangeDelta {
@@ -95,6 +103,22 @@ async function getCompletedDownloadFilename(downloadId: number): Promise<string>
   return filename;
 }
 
+export async function isDownloadedAssetPresent(downloadId: number | undefined, filename?: string): Promise<boolean> {
+  if (typeof downloadId === "number") {
+    const matches = (await browser.downloads.search({ id: downloadId })) as DownloadSearchResult[];
+    const match = matches[0];
+    if (match?.state === "complete" && match.exists === true) {
+      return true;
+    }
+  }
+
+  if (filename) {
+    return (await findExistingCompletedDownload(filename)) !== null;
+  }
+
+  return false;
+}
+
 export async function applyDownloadUiPreference(enabled: boolean): Promise<void> {
   const downloadsApi = browser.downloads as typeof browser.downloads & {
     setUiOptions?: (options: { enabled: boolean }) => Promise<void>;
@@ -105,8 +129,14 @@ export async function applyDownloadUiPreference(enabled: boolean): Promise<void>
   await downloadsApi.setUiOptions({ enabled });
 }
 
-export async function downloadTextAsset(filename: string, content: string, mimeType: string): Promise<DownloadedAsset> {
-  const existing = await findExistingCompletedDownload(filename);
+export async function downloadTextAsset(
+  filename: string,
+  content: string,
+  mimeType: string,
+  options: DownloadTextAssetOptions = {},
+  rootPath?: string,
+): Promise<DownloadedAsset> {
+  const existing = options.forceFresh ? null : await findExistingCompletedDownload(filename);
   if (existing) {
     return existing;
   }
@@ -128,7 +158,92 @@ export async function downloadTextAsset(filename: string, content: string, mimeT
 
   try {
     await pingNativeHost();
-    const relocated = await relocateFileWithNativeHost(actualFilename, filename);
+    const relocated = await relocateFileWithNativeHost(actualFilename, filename, rootPath);
+    if (relocated.path) {
+      resolvedFilename = relocated.path;
+    }
+  } catch {
+    resolvedFilename = actualFilename;
+  }
+
+  return {
+    downloadId,
+    filename: resolvedFilename,
+  };
+}
+
+export async function downloadBinaryAsset(
+  filename: string,
+  contentBase64: string,
+  mimeType: string,
+  options: DownloadTextAssetOptions = {},
+  rootPath?: string,
+): Promise<DownloadedAsset> {
+  const existing = options.forceFresh ? null : await findExistingCompletedDownload(filename);
+  if (existing) {
+    return existing;
+  }
+
+  const downloadId = await browser.downloads.download({
+    url: toBase64DataUrl(contentBase64, mimeType),
+    filename,
+    saveAs: false,
+    conflictAction: "uniquify",
+  });
+
+  if (typeof downloadId !== "number") {
+    throw new Error(`Downloads API returned an invalid id for ${filename}.`);
+  }
+
+  await waitForDownloadCompletion(downloadId);
+  const actualFilename = await getCompletedDownloadFilename(downloadId);
+  let resolvedFilename = actualFilename;
+
+  try {
+    await pingNativeHost();
+    const relocated = await relocateFileWithNativeHost(actualFilename, filename, rootPath);
+    if (relocated.path) {
+      resolvedFilename = relocated.path;
+    }
+  } catch {
+    resolvedFilename = actualFilename;
+  }
+
+  return {
+    downloadId,
+    filename: resolvedFilename,
+  };
+}
+
+export async function downloadRemoteAsset(
+  filename: string,
+  url: string,
+  options: DownloadTextAssetOptions = {},
+  rootPath?: string,
+): Promise<DownloadedAsset> {
+  const existing = options.forceFresh ? null : await findExistingCompletedDownload(filename);
+  if (existing) {
+    return existing;
+  }
+
+  const downloadId = await browser.downloads.download({
+    url,
+    filename,
+    saveAs: false,
+    conflictAction: "uniquify",
+  });
+
+  if (typeof downloadId !== "number") {
+    throw new Error(`Downloads API returned an invalid id for ${filename}.`);
+  }
+
+  await waitForDownloadCompletion(downloadId, 60_000);
+  const actualFilename = await getCompletedDownloadFilename(downloadId);
+  let resolvedFilename = actualFilename;
+
+  try {
+    await pingNativeHost();
+    const relocated = await relocateFileWithNativeHost(actualFilename, filename, rootPath);
     if (relocated.path) {
       resolvedFilename = relocated.path;
     }

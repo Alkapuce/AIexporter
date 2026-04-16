@@ -12,6 +12,19 @@ function normalizeDetails(details: Record<string, unknown> | undefined): Record<
   }
 }
 
+function pickLogMetadata(details: Record<string, unknown> | undefined): Pick<
+  DebugLogInput,
+  "platform" | "sourceId" | "workerId" | "traceId" | "code"
+> {
+  return {
+    platform: typeof details?.platform === "string" ? (details.platform as DebugLogInput["platform"]) : undefined,
+    sourceId: typeof details?.sourceId === "string" ? details.sourceId : undefined,
+    workerId: typeof details?.workerId === "string" ? details.workerId : undefined,
+    traceId: typeof details?.traceId === "string" ? details.traceId : undefined,
+    code: typeof details?.code === "string" ? details.code : undefined,
+  };
+}
+
 export async function writeBackgroundLog(
   scope: string,
   level: DebugLogLevel,
@@ -21,6 +34,7 @@ export async function writeBackgroundLog(
   await appendDebugLog({
     level,
     scope,
+    ...pickLogMetadata(details),
     message,
     details: normalizeDetails(details),
   });
@@ -37,10 +51,7 @@ export async function writeBackgroundError(
     scope,
     code,
     message,
-    platform: typeof details?.platform === "string" ? (details.platform as DebugLogInput["platform"]) : undefined,
-    sourceId: typeof details?.sourceId === "string" ? details.sourceId : undefined,
-    workerId: typeof details?.workerId === "string" ? details.workerId : undefined,
-    traceId: typeof details?.traceId === "string" ? details.traceId : undefined,
+    ...pickLogMetadata(details),
     details: normalizeDetails(details),
   });
 }
@@ -65,11 +76,7 @@ export function createRuntimeLogger(scope: string) {
         entry: {
           level,
           scope,
-          platform: typeof details?.platform === "string" ? (details.platform as DebugLogInput["platform"]) : undefined,
-          sourceId: typeof details?.sourceId === "string" ? details.sourceId : undefined,
-          workerId: typeof details?.workerId === "string" ? details.workerId : undefined,
-          traceId: typeof details?.traceId === "string" ? details.traceId : undefined,
-          code: typeof details?.code === "string" ? details.code : undefined,
+          ...pickLogMetadata(details),
           message,
           details: normalizeDetails(details),
         } satisfies DebugLogInput,

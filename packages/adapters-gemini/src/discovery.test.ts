@@ -1,9 +1,12 @@
 import { JSDOM } from "jsdom";
 import { describe, expect, it } from "vitest";
+import { parseGeminiConversationFromHnvQHbResponse } from "./adapter";
 import {
   extractAiStudioPayloadsFromDocument,
+  extractAiStudioPayloadsFromListPromptsResponse,
   extractAiStudioPromptIdFromUrl,
   extractGeminiConversationIdFromUrl,
+  extractGeminiPayloadsFromBatchedResponse,
   extractGeminiPayloadsFromDocument,
 } from "./discovery";
 
@@ -22,8 +25,14 @@ describe("google platform discovery", () => {
   it("extracts Gemini history payloads from DOM links", () => {
     const dom = new JSDOM(`
       <body>
-        <a href="/app/conv-1">First Gemini Chat</a>
-        <a href="/app/conv-2?aiexporter_worker=1">Second Gemini Chat</a>
+        <div class="history-item">
+          <a href="/app/conv-1">First Gemini Chat</a>
+          <span>2 days ago</span>
+        </div>
+        <div class="history-item">
+          <a href="/app/conv-2?aiexporter_worker=1">Second Gemini Chat</a>
+          <span>Yesterday</span>
+        </div>
         <a href="/app">New chat</a>
       </body>
     `);
@@ -31,11 +40,13 @@ describe("google platform discovery", () => {
     expect(extractGeminiPayloadsFromDocument(dom.window.document)).toEqual([
       {
         sourceId: "conv-1",
+        sourceUpdatedLabel: "2 days ago",
         title: "First Gemini Chat",
         url: "https://gemini.google.com/app/conv-1",
       },
       {
         sourceId: "conv-2",
+        sourceUpdatedLabel: "Yesterday",
         title: "Second Gemini Chat",
         url: "https://gemini.google.com/app/conv-2",
       },
@@ -71,5 +82,283 @@ describe("google platform discovery", () => {
         url: "https://aistudio.google.com/prompts/prompt-2",
       },
     ]);
+  });
+
+  it("extracts AI Studio history payloads from ListPrompts responses", () => {
+    const response = JSON.stringify([
+      [
+        [
+          "prompts/prompt-1",
+          null,
+          null,
+          null,
+          [
+            "Prompt One",
+            null,
+            ["peijin qiu", 1, "https://example.com/avatar.png"],
+            null,
+            [["1775658791", 874000000], ["peijin qiu", 1, "https://example.com/avatar.png"]],
+          ],
+        ],
+        [
+          "prompts/prompt-2",
+          null,
+          null,
+          null,
+          [
+            "Prompt Two",
+            null,
+            ["peijin qiu", 1, "https://example.com/avatar.png"],
+            null,
+            [["1775640848", 973000000], ["peijin qiu", 1, "https://example.com/avatar.png"]],
+          ],
+        ],
+      ],
+      "~!!~cursor-2",
+    ]);
+
+    expect(extractAiStudioPayloadsFromListPromptsResponse(response)).toEqual({
+      payloads: [
+        {
+          sourceId: "prompt-1",
+          title: "Prompt One",
+          url: "https://aistudio.google.com/prompts/prompt-1",
+          sourceUpdatedAt: "2026-04-08T14:33:11.874Z",
+        },
+        {
+          sourceId: "prompt-2",
+          title: "Prompt Two",
+          url: "https://aistudio.google.com/prompts/prompt-2",
+          sourceUpdatedAt: "2026-04-08T09:34:08.973Z",
+        },
+      ],
+      nextCursor: "~!!~cursor-2",
+    });
+  });
+
+  it("extracts Gemini history payloads from batched responses", () => {
+    const response = String.raw`)]}'
+
+1667
+[["wrb.fr","MaZiqc","[null,\"token\",[[\"c_07374124195681dd\",\"导体静电平衡原理讨论\",null,null,null,[1775572077,285944000],null,null,null,2],[\"c_02becacfd54705d0\",\"充电电容器储能计算\",null,null,null,[1775572004,569120000],null,null,null,2]]",null,null,null,"generic"]]`;
+
+    expect(extractGeminiPayloadsFromBatchedResponse(response)).toEqual([
+      {
+        sourceId: "07374124195681dd",
+        title: "导体静电平衡原理讨论",
+        url: "https://gemini.google.com/app/07374124195681dd",
+        sourceUpdatedAt: "2026-04-07T14:27:57.285Z",
+      },
+      {
+        sourceId: "02becacfd54705d0",
+        title: "充电电容器储能计算",
+        url: "https://gemini.google.com/app/02becacfd54705d0",
+        sourceUpdatedAt: "2026-04-07T14:26:44.569Z",
+      },
+    ]);
+  });
+
+  it("extracts Gemini current conversation from hNvQHb batched responses", () => {
+    const turns = [
+      [
+        ["c_abc123", "r_resp1"],
+        null,
+        [["第一问"], 2, null, 1, "trace-1", 0],
+        [
+          [
+            [
+              "resp-1",
+              ["第一答复"],
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              [["**Thinking One**"]],
+            ],
+          ],
+          null,
+          null,
+          "resp-1",
+          null,
+          null,
+          null,
+          null,
+          null,
+          [10, 10],
+        ],
+        [1775700000, 111000000],
+      ],
+      [
+        ["c_abc123", "r_resp2"],
+        null,
+        [["第二问"], 2, null, 1, "trace-2", 0],
+        [
+          [
+            [
+              "resp-2",
+              ["第二答复"],
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              null,
+              [["**Thinking Two**"]],
+            ],
+          ],
+          null,
+          null,
+          "resp-2",
+          null,
+          null,
+          null,
+          null,
+          null,
+          [10, 10],
+        ],
+        [1775700100, 222000000],
+      ],
+    ];
+    const response = `)]}'\n\n123\n${JSON.stringify([["wrb.fr", "hNvQHb", JSON.stringify([turns, null, null, []]), null, null, null]])}`;
+
+    const bundle = parseGeminiConversationFromHnvQHbResponse(
+      response,
+      "https://gemini.google.com/app/abc123",
+      "abc123",
+      "Gemini Thread",
+    );
+
+    expect(bundle.title).toBe("Gemini Thread");
+    expect(bundle.messages).toHaveLength(4);
+    expect(bundle.messages[0]?.markdown).toBe("第一问");
+    expect(bundle.messages[1]?.markdown).toContain("第一答复");
+    expect(bundle.messages[1]?.markdown).toContain("[thinking]");
+  expect(bundle.messages[3]?.markdown).toContain("第二答复");
+  expect(bundle.sourceUpdatedAt).toBe("2026-04-09T02:01:40.222Z");
+  expect(bundle.meta?.source).toBe("page-world-rpc");
+  });
+
+  it("extracts Gemini uploaded image attachments from page-world RPC responses", () => {
+    const turns = [
+      [
+        null,
+        null,
+        [
+          [
+            "带图提问",
+            null,
+            null,
+            null,
+            [
+              [
+                null,
+                null,
+                null,
+                [
+                  [
+                    null,
+                    1,
+                    "photo-1.jpg",
+                    "https://lh3.googleusercontent.com/gg/example-photo-1",
+                    null,
+                    "opaque-token",
+                    null,
+                    null,
+                    6,
+                    [1775700100, 111000000],
+                    null,
+                    "image/jpeg",
+                    null,
+                    null,
+                    null,
+                    [1000, 750, 123456],
+                  ],
+                ],
+              ],
+            ],
+          ],
+        ],
+        [
+          [
+            [
+              "resp-1",
+              ["带图答复"],
+            ],
+          ],
+        ],
+        [1775700100, 111000000],
+      ],
+    ];
+    const response = `)]}'\n\n123\n${JSON.stringify([["wrb.fr", "hNvQHb", JSON.stringify([turns, null, null, []]), null, null, null]])}`;
+
+    const bundle = parseGeminiConversationFromHnvQHbResponse(
+      response,
+      "https://gemini.google.com/app/with-images",
+      "with-images",
+      "With Images",
+    );
+
+    expect(bundle.messages[0]?.markdown).toContain("![photo-1.jpg](https://lh3.googleusercontent.com/gg/example-photo-1)");
+    expect(bundle.messages[0]?.markdown).toContain("带图提问");
   });
 });

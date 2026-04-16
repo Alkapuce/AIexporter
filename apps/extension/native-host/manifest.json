@@ -1,9 +1,9 @@
 {
+  "description": "AIexporter shell bridge",
+  "type": "stdio",
   "allowed_origins": [
     "chrome-extension://mllibebijafamehilmldnodfkkimmpdf/"
   ],
-  "type": "stdio",
-  "description": "AIexporter shell bridge",
-  "name": "com.aiexporter.shell",
-  "path": "C:\\Users\\qpj\\project\\Workspaces\\AIexporter\\apps\\extension\\native-host\\host.cmd"
+  "path": "D:\\project\\Workspaces\\AIexporter\\apps\\extension\\native-host\\host.cmd",
+  "name": "com.aiexporter.shell"
 }

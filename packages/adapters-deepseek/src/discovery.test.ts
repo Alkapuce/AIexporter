@@ -179,4 +179,33 @@ describe("deepseek discovery", () => {
     expect(bundle.messages[1]?.markdown).toContain("Final answer");
     expect(bundle.sourceUpdatedAt).toBe("2025-02-23T18:07:01.198Z");
   });
+
+  it("promotes remote image and document urls into attachment markdown", () => {
+    const bundle = parseHistoryResponse(
+      {
+        code: 0,
+        data: {
+          biz_data: {
+            chat_session: {
+              id: "session-4",
+              title: "Attachments",
+            },
+            chat_messages: [
+              {
+                message_id: 1,
+                role: "USER",
+                content: "请看 https://example.com/report.pdf 和 https://example.com/chart.png",
+                inserted_at: "2026-03-18T10:00:00.000Z",
+              },
+            ],
+          },
+        },
+      },
+      "https://chat.deepseek.com/a/chat/s/session-4",
+      "session-4",
+    );
+
+    expect(bundle.messages[0]?.markdown).toContain("> [attachment] [report.pdf](https://example.com/report.pdf)");
+    expect(bundle.messages[0]?.markdown).toContain("![chart.png](https://example.com/chart.png)");
+  });
 });

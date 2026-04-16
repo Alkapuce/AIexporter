@@ -34,6 +34,12 @@ interface QueueTabProps {
   onForceExport: (key: string) => void;
   onOpenLatest: (sourceId: string) => void;
   onShowFolder: (sourceId: string) => void;
+  page: number;
+  totalPages: number;
+  pageSize: number;
+  totalItems: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (pageSize: number) => void;
 }
 
 const cardStyle: CSSProperties = {
@@ -99,7 +105,16 @@ export function QueueTab({
   onForceExport,
   onOpenLatest,
   onShowFolder,
+  page,
+  totalPages,
+  pageSize,
+  totalItems,
+  onPageChange,
+  onPageSizeChange,
 }: QueueTabProps) {
+  const pageStart = totalItems === 0 ? 0 : (page - 1) * pageSize + 1;
+  const pageEnd = totalItems === 0 ? 0 : Math.min(totalItems, page * pageSize);
+
   return (
     <div style={cardStyle}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
@@ -157,6 +172,33 @@ export function QueueTab({
         <ActionButton disabled={busy} onClick={onResumePlatform}>
           {t("queue.resumePlatform")}
         </ActionButton>
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
+        <div style={{ color: "#475569", fontSize: 12 }}>
+          {t("queue.pagination.summary")}: {pageStart}-{pageEnd} / {totalItems}
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <label style={{ display: "flex", gap: 6, alignItems: "center", color: "#475569", fontSize: 12 }}>
+            <span>{t("queue.pagination.pageSize")}</span>
+            <select style={{ ...inputStyle, width: 96 }} value={String(pageSize)} onChange={(event) => onPageSizeChange(Number(event.target.value))}>
+              {[50, 100, 200].map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))}
+            </select>
+          </label>
+          <ActionButton disabled={busy || page <= 1} style={{ background: "#475569" }} onClick={() => onPageChange(page - 1)}>
+            {t("queue.pagination.prev")}
+          </ActionButton>
+          <div style={{ color: "#111827", fontSize: 12, fontWeight: 600 }}>
+            {t("queue.pagination.page")}: {page} / {Math.max(1, totalPages)}
+          </div>
+          <ActionButton disabled={busy || page >= totalPages} style={{ background: "#475569" }} onClick={() => onPageChange(page + 1)}>
+            {t("queue.pagination.next")}
+          </ActionButton>
+        </div>
       </div>
 
       <div style={{ display: "grid", gap: 8 }}>

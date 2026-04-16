@@ -100,6 +100,7 @@ export async function ensureWorkerReceiver(
   tabId: number,
   targetUrl: string,
   config: PlatformRuntimeConfig,
+  context: { sourceId?: string; traceId?: string } = {},
 ): Promise<number> {
   try {
     await waitForWorkerReady(tabId, targetUrl, config.receiverReadyTimeoutMs);
@@ -109,6 +110,8 @@ export async function ensureWorkerReceiver(
       code: "worker.receiver_unavailable",
       platform: worker.platform,
       workerId: worker.workerId,
+      sourceId: context.sourceId,
+      traceId: context.traceId,
       targetUrl,
       error: error instanceof Error ? error.message : "Worker receiver was not ready",
     });
@@ -133,7 +136,15 @@ export async function extractConversationFromTab(tabId: number, timeoutMs: numbe
 
 export function isChallengeLikeTab(tab: browser.tabs.Tab): boolean {
   const text = [tab.title, tab.url].filter(Boolean).join(" ").toLowerCase();
-  return text.includes("just a moment") || text.includes("cloudflare") || text.includes("verify");
+  return (
+    text.includes("just a moment") ||
+    text.includes("cloudflare") ||
+    text.includes("verify") ||
+    text.includes("captcha") ||
+    text.includes("recaptcha") ||
+    text.includes("unusual traffic") ||
+    text.includes("sorry/index")
+  );
 }
 
 export async function closeWorkerTab(tabId: number | undefined, intentionalWorkerTabClosures: Set<number>): Promise<void> {

@@ -15,12 +15,21 @@ export function findLatestArtifactForConversation(
   sourceId: string,
 ): ExportArtifactEntry | undefined {
   const latestMarked = entries.find(
-    (entry) => sameConversation(entry, platform, sourceId) && entry.isLatestForConversation && entry.localStatus !== "deleted",
+    (entry) =>
+      sameConversation(entry, platform, sourceId) &&
+      entry.isLatestForConversation &&
+      entry.localStatus !== "deleted" &&
+      entry.localStatus !== "archived",
   );
   if (latestMarked) return latestMarked;
 
   return [...entries]
-    .filter((entry) => sameConversation(entry, platform, sourceId) && entry.localStatus !== "deleted")
+    .filter(
+      (entry) =>
+        sameConversation(entry, platform, sourceId) &&
+        entry.localStatus !== "deleted" &&
+        entry.localStatus !== "archived",
+    )
     .sort((left, right) => Date.parse(right.exportedAt) - Date.parse(left.exportedAt))[0];
 }
 
@@ -34,7 +43,8 @@ export function findLatestOpenableArtifactForConversation(
       (entry) =>
         sameConversation(entry, platform, sourceId) &&
         entry.localStatus !== "deleted" &&
-        typeof entry.markdownDownloadId === "number",
+        entry.localStatus !== "archived" &&
+        (typeof entry.markdownDownloadId === "number" || typeof entry.markdownFilename === "string"),
     )
     .sort((left, right) => {
       const latestRank =
@@ -54,7 +64,8 @@ export function findExactArtifact(
     (entry) =>
       sameConversation(entry, platform, sourceId) &&
       entry.revision === revision &&
-      entry.localStatus !== "deleted",
+      entry.localStatus !== "deleted" &&
+      entry.localStatus !== "archived",
   );
 }
 
@@ -62,9 +73,17 @@ export function shouldSkipPersist(
   latestArtifact: ExportArtifactEntry | undefined,
   revision: string,
   settings: ExtensionSettings,
+  latestExportCompatibilityVersion?: string,
+  currentExportCompatibilityVersion?: string,
 ): boolean {
   if (!settings.downloads.skipIfLatestExists) return false;
   if (!latestArtifact) return false;
+  if (
+    currentExportCompatibilityVersion &&
+    latestExportCompatibilityVersion !== currentExportCompatibilityVersion
+  ) {
+    return false;
+  }
   return latestArtifact.revision === revision && latestArtifact.localStatus !== "deleted";
 }
 

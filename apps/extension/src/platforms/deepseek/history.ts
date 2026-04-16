@@ -8,6 +8,7 @@ import {
   summarizeHistoryPage,
   type DeepSeekHistoryResponse,
 } from "@aiexporter/adapters-deepseek";
+import { normalizeConversationUrl } from "@aiexporter/core-schema";
 import { buildDeepSeekApiHeaders } from "./browser-context";
 
 type RuntimeLogger = (
@@ -30,6 +31,60 @@ const MESSAGE_SCROLL_SETTLE_MS = 500;
 const MESSAGE_SCROLL_MAX_STEPS = 60;
 const MESSAGE_SCROLL_STABLE_ROUNDS = 2;
 const DISCOVERY_API_PAGE_LIMIT = 10;
+
+function extractAttachmentBlocks(markdown: string): string[] {
+  return markdown
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter((block) => /^>\s*\[attachment\]/i.test(block));
+}
+
+function collectAttachmentBlocksFromDocument(documentRef: Document): string[] {
+  const blocks: string[] = [];
+  const seen = new Set<string>();
+  documentRef.querySelectorAll<HTMLElement>(".f3a54b52").forEach((nameNode) => {
+    const name = nameNode.textContent?.trim();
+    if (!name || !/\.(pdf|png|jpe?g|gif|webp|bmp|svg|docx?|pptx?|xlsx?|csv|tsv|md|txt)$/i.test(name)) {
+      return;
+    }
+    const card = nameNode.closest<HTMLElement>("._76cd190, ._5cadb25, [tabindex='0']");
+    const meta = card?.querySelector<HTMLElement>("._5119742, .dc832104")?.textContent?.trim();
+    const block = `> [attachment] ${name}${meta ? ` (${meta})` : ""}`;
+    if (seen.has(block)) return;
+    seen.add(block);
+    blocks.push(block);
+  });
+  return blocks;
+}
+
+function mergeApiBundleWithDomAttachments(
+  apiBundle: Awaited<ReturnType<typeof parseHistoryResponse>>,
+  documentRef: Document,
+) {
+  const documentAttachmentBlocks = collectAttachmentBlocksFromDocument(documentRef);
+  const mergedMessages = apiBundle.messages.map((message, index) => {
+    const domAttachmentBlocks =
+      index === 0 && message.role === "user"
+        ? documentAttachmentBlocks
+        : extractAttachmentBlocks(message.markdown);
+    if (domAttachmentBlocks.length === 0 || /\[attachment\]/i.test(message.markdown)) {
+      return message;
+    }
+    return {
+      ...message,
+      markdown: `${domAttachmentBlocks.join("\n\n")}\n\n${message.markdown}`.trim(),
+    };
+  });
+
+  return {
+    ...apiBundle,
+    messages: mergedMessages,
+    meta: {
+      ...(apiBundle.meta ?? {}),
+      source: "api+dom-attachments",
+    },
+  };
+}
 
 export type HistoricalDiscoverySource = "api" | "sidebar" | "merged" | "buffered" | "empty";
 
@@ -242,14 +297,25 @@ export async function fetchDeepSeekConversationViaPageWorld(
 }
 
 export async function extractCurrentDeepSeekConversation(log: RuntimeLogger) {
-  const sourceId = extractSessionIdFromUrl(window.location.href);
+  const normalizedUrl = normalizeConversationUrl(window.location.href);
+  const sourceId = extractSessionIdFromUrl(normalizedUrl);
   if (!sourceId) {
     throw new Error("Current page is not a DeepSeek conversation URL.");
   }
 
   try {
     const payload = await fetchDeepSeekConversationViaPageWorld(sourceId, log);
-    const bundle = parseHistoryResponse(payload, window.location.href, sourceId);
+    let bundle = parseHistoryResponse(payload, normalizedUrl, sourceId);
+    await waitForConversationViewportReady(document, location);
+    await hydrateConversationDomIfNeeded(document, location, log);
+    if (collectAttachmentBlocksFromDocument(document).length > 0) {
+      bundle = mergeApiBundleWithDomAttachments(bundle, document);
+      await log("info", "Merged DeepSeek DOM attachment cards with page-world API conversation.", {
+        code: "extract.page_world_dom_attachment_merge",
+        sourceId,
+        messageCount: bundle.messages.length,
+      });
+    }
     await log("info", "Extracted current DeepSeek conversation via page-world API.", {
       code: "extract.page_world_success",
       sourceId,
@@ -301,18 +367,71 @@ function getSidebarScrollContainer(documentRef: Document): HTMLElement | null {
   return null;
 }
 
+function getDeepSeekSidebarToggleButton(documentRef: Document): HTMLElement | null {
+  const selectors = [
+    'button[aria-label*="sidebar" i]',
+    'button[aria-label*="history" i]',
+    'button[aria-label*="menu" i]',
+    '[data-testid*="sidebar" i]',
+    '[data-testid*="history" i]',
+    '[data-testid*="menu" i]',
+  ];
+
+  for (const selector of selectors) {
+    const match = documentRef.querySelector<HTMLElement>(selector);
+    if (match) return match;
+  }
+
+  return Array.from(documentRef.querySelectorAll<HTMLElement>("button, [role='button']")).find((candidate) => {
+    const label = [
+      candidate.getAttribute("aria-label"),
+      candidate.getAttribute("title"),
+      candidate.textContent,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    return label.includes("sidebar") || label.includes("history") || label.includes("menu");
+  }) ?? null;
+}
+
+async function ensureDeepSeekSidebarVisible(documentRef: Document, log: RuntimeLogger): Promise<void> {
+  if (documentRef.querySelector(DISCOVERY_LINK_SELECTOR) || getSidebarScrollContainer(documentRef)) {
+    return;
+  }
+
+  const toggle = getDeepSeekSidebarToggleButton(documentRef);
+  if (!toggle) {
+    return;
+  }
+
+  toggle.click();
+  await new Promise((resolve) => window.setTimeout(resolve, 1_000));
+
+  await log("info", "Attempted to open the DeepSeek history sidebar before discovery.", {
+    code: "discovery.sidebar_toggle_attempted",
+    title: documentRef.title,
+    url: window.location.href,
+  });
+}
+
 async function waitForDiscoverySidebarReady(
   log: RuntimeLogger,
   timeoutMs = DISCOVERY_LINK_WAIT_TIMEOUT_MS,
   documentRef: Document = document,
 ): Promise<{ container: HTMLElement | null; hrefCount: number }> {
   const startedAt = Date.now();
+  let sidebarToggleAttempted = false;
 
   while (Date.now() - startedAt < timeoutMs) {
     const container = getSidebarScrollContainer(documentRef);
     const hrefCount = documentRef.querySelectorAll(DISCOVERY_LINK_SELECTOR).length;
     if (container && hrefCount > 0) {
       return { container, hrefCount };
+    }
+    if (!sidebarToggleAttempted && hrefCount === 0) {
+      sidebarToggleAttempted = true;
+      await ensureDeepSeekSidebarVisible(documentRef, log);
     }
     await new Promise((resolve) => window.setTimeout(resolve, DISCOVERY_LINK_POLL_MS));
   }
@@ -386,6 +505,21 @@ export async function collectHistoricalPayloads(
     await log("warn", "DeepSeek discovery API pagination failed, falling back to sidebar crawl.", {
       error: error instanceof Error ? error.message : "DeepSeek discovery API pagination failed",
     });
+  }
+
+  if (apiPayloads.length > 0) {
+    const resolution = resolveHistoricalPayloads({
+      apiPayloads,
+      sidebarPayloads: [],
+      bufferedPayloads: discoveryPayloadBuffer.values(),
+    });
+
+    await log("info", "Collected DeepSeek historical conversations via API without sidebar crawl.", {
+      discoveredCount: resolution.payloads.length,
+      source: resolution.source,
+    });
+
+    return resolution.payloads;
   }
 
   const { container, hrefCount } = await waitForDiscoverySidebarReady(log, options.readyTimeoutMs);

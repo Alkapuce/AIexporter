@@ -26,11 +26,14 @@ export default defineConfig({
       "https://chat.deepseek.com/*",
       "https://gemini.google.com/*",
       "https://aistudio.google.com/*",
+      "https://*.googleusercontent.com/*",
+      "https://*.gstatic.com/*",
+      "https://*.googleapis.com/*",
     ],
     web_accessible_resources: [
       {
-        resources: ["chatgpt-main-world.js", "deepseek-main-world.js"],
-        matches: ["https://chatgpt.com/*", "https://chat.deepseek.com/*"],
+        resources: ["chatgpt-main-world.js", "deepseek-main-world.js", "gemini-main-world.js"],
+        matches: ["https://chatgpt.com/*", "https://chat.deepseek.com/*", "https://gemini.google.com/*"],
       },
     ],
   },

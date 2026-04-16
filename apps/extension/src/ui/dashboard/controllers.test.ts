@@ -5,6 +5,7 @@ import {
   buildDashboardArtifactState,
   buildDashboardConversationIndexMap,
   buildDashboardSnapshotState,
+  buildRelatedDashboardLogs,
   filterDashboardLogs,
   filterDashboardQueueItems,
   parseRelativeTimeLabel,
@@ -48,6 +49,10 @@ const baseSettings: ExtensionSettings = {
       bootstrapWindowMode: "background_tab",
       discoveryReadyTimeoutMs: 1000,
       discoveryScrollStableRounds: 2,
+      discoveryDomMaxCycles: 24,
+      discoveryDomPostScrollWaitMs: 5000,
+      discoveryDomStableCycles: 3,
+      discoveryDomScrollBottomAttempts: 4,
       receiverReadyTimeoutMs: 1000,
       receiverRetryLimit: 1,
       apiExtractMode: "page_world_first",
@@ -67,6 +72,10 @@ const baseSettings: ExtensionSettings = {
       bootstrapWindowMode: "background_tab",
       discoveryReadyTimeoutMs: 1000,
       discoveryScrollStableRounds: 2,
+      discoveryDomMaxCycles: 200,
+      discoveryDomPostScrollWaitMs: 5000,
+      discoveryDomStableCycles: 3,
+      discoveryDomScrollBottomAttempts: 4,
       receiverReadyTimeoutMs: 1000,
       receiverRetryLimit: 1,
       apiExtractMode: "page_world_first",
@@ -86,6 +95,10 @@ const baseSettings: ExtensionSettings = {
       bootstrapWindowMode: "background_tab",
       discoveryReadyTimeoutMs: 1000,
       discoveryScrollStableRounds: 2,
+      discoveryDomMaxCycles: 24,
+      discoveryDomPostScrollWaitMs: 5000,
+      discoveryDomStableCycles: 3,
+      discoveryDomScrollBottomAttempts: 4,
       receiverReadyTimeoutMs: 1000,
       receiverRetryLimit: 1,
       apiExtractMode: "page_world_first",
@@ -105,6 +118,10 @@ const baseSettings: ExtensionSettings = {
       bootstrapWindowMode: "background_tab",
       discoveryReadyTimeoutMs: 1000,
       discoveryScrollStableRounds: 2,
+      discoveryDomMaxCycles: 24,
+      discoveryDomPostScrollWaitMs: 5000,
+      discoveryDomStableCycles: 3,
+      discoveryDomScrollBottomAttempts: 4,
       receiverReadyTimeoutMs: 1000,
       receiverRetryLimit: 1,
       apiExtractMode: "page_world_first",
@@ -247,6 +264,44 @@ describe("dashboard controllers", () => {
     });
 
     expect(filtered.map((entry) => entry.id)).toEqual(["log-2"]);
+  });
+
+  it("builds a related timeline for the same sourceId", () => {
+    const related = buildRelatedDashboardLogs(
+      [
+        debugLogs[1]!,
+        {
+          id: "log-3",
+          timestamp: "2026-03-30T10:00:30.000Z",
+          level: "warn",
+          scope: "background.queue",
+          message: "queued retry",
+          sourceId: "conv-1",
+          traceId: "trace-1",
+        },
+        {
+          id: "log-4",
+          timestamp: "2026-03-30T10:00:45.000Z",
+          level: "info",
+          scope: "background.persist",
+          message: "persisted",
+          sourceId: "conv-1",
+          traceId: "trace-1",
+        },
+        {
+          ...debugLogs[0]!,
+          sourceId: "conv-1",
+          traceId: "trace-1",
+        },
+      ],
+      {
+        ...debugLogs[0]!,
+        sourceId: "conv-1",
+        traceId: "trace-1",
+      },
+    );
+
+    expect(related.map((entry) => entry.id)).toEqual(["log-1", "log-3", "log-4"]);
   });
 
   it("updates nested settings drafts without mutating siblings", () => {

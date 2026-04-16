@@ -1,12 +1,16 @@
-import type { QueueState, RuntimeMessage } from "@aiexporter/adapter-sdk";
+import { AIEXPORTER_EXPORT_COMPATIBILITY_VERSION, type QueueState, type RuntimeMessage } from "@aiexporter/adapter-sdk";
 import type { SourcePlatform } from "@aiexporter/core-schema";
-import { clearHistoricalItems, clearItemsByStatuses, markQueueItemStatus, removeQueueItem, retryFailedItems } from "../runtime/queue";
+import { clearHistoricalItems, clearItemsByStatuses, markQueueItemStatus, mergeDiscoveryEvent, removeQueueItem, retryFailedItems } from "../runtime/queue";
 import { downloadTextAsset } from "../runtime/downloads";
 import { writeBackgroundLog } from "../runtime/logger";
+import { pickFolderWithNativeHost, pingNativeHost, resolveExportRootWithNativeHost, writeFileWithNativeHost } from "../runtime/native-host";
 import { loadDebugState, loadQueueState, updateConversationIndex, clearDebugState } from "../runtime/storage";
 import { markConversationIndexExportResult, upsertConversationIndexEntry } from "../runtime/indexes";
 import { openLatestArtifact, persistBundle, showLatestArtifactFolder } from "./artifact-persistence";
+import { syncArtifactsWithDisk } from "./artifact-sync";
+import { getConfiguredExportRoot } from "./export-root";
 import {
+  getQueueStateSnapshot,
   mergeSettings,
   recordManualExportDebug,
   refreshQueueServices,
@@ -20,9 +24,12 @@ const BACKGROUND_MESSAGE_TYPES = [
   "artifact-clear-platform-local",
   "artifact-open-latest",
   "artifact-show-folder",
+  "artifact-sync-run",
   "dashboard-log-export-request",
   "debug-clear-request",
   "debug-log",
+  "downloads-pick-export-root",
+  "downloads-resolve-export-root",
   "debug-state-request",
   "manual-export-current",
   "platform-settings-update",
@@ -59,6 +66,7 @@ type BackgroundRuntimeHandlerMap = {
 export interface BackgroundRuntimeRouterDeps {
   clearDebugState: typeof clearDebugState;
   downloadTextAsset: typeof downloadTextAsset;
+  getQueueStateSnapshot: typeof getQueueStateSnapshot;
   loadDebugState: typeof loadDebugState;
   loadQueueState: typeof loadQueueState;
   openLatestArtifact: typeof openLatestArtifact;
@@ -75,6 +83,7 @@ export interface BackgroundRuntimeRouterDeps {
 const defaultDeps: BackgroundRuntimeRouterDeps = {
   clearDebugState,
   downloadTextAsset,
+  getQueueStateSnapshot,
   loadDebugState,
   loadQueueState,
   openLatestArtifact,
@@ -94,6 +103,62 @@ function inferManualExportPlatform(sender: browser.runtime.MessageSender): Sourc
   if (url.includes("gemini.google.com")) return "gemini";
   if (url.includes("aistudio.google.com")) return "aistudio";
   return "chatgpt";
+}
+
+async function exportDebugSnapshot(deps: BackgroundRuntimeRouterDeps) {
+  const debugState = await deps.loadDebugState();
+  const queueState = await deps.loadQueueState();
+  const relativePath = `AIexporter/debug/debug-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+  const payload = JSON.stringify(
+    {
+      exportedAt: new Date().toISOString(),
+      exporterVersion: browser.runtime.getManifest().version,
+      exportCompatibilityVersion: AIEXPORTER_EXPORT_COMPATIBILITY_VERSION,
+      logCount: debugState.logs.length,
+      logs: debugState.logs,
+    },
+    null,
+    2,
+  );
+
+  try {
+    const exportRoot = getConfiguredExportRoot(queueState.settings);
+    await pingNativeHost();
+    const response = await writeFileWithNativeHost(relativePath, payload, "utf8", exportRoot);
+    if (response.path) {
+      await deps.writeBackgroundLog("background.debug", "info", "Exported dashboard logs via native host.", {
+        code: "debug.exported_native_host",
+        path: response.path,
+        logCount: debugState.logs.length,
+      });
+      return {
+        path: response.path,
+        transport: "native-host" as const,
+      };
+    }
+  } catch (error) {
+    if (getConfiguredExportRoot(queueState.settings)) {
+      throw error instanceof Error ? error : new Error(String(error));
+    }
+    await deps.writeBackgroundLog("background.debug", "warn", "Native-host dashboard log export failed, falling back to downloads API.", {
+      code: "debug.export_native_host_failed",
+      error: error instanceof Error ? error.message : "Native-host dashboard log export failed.",
+      relativePath,
+      logCount: debugState.logs.length,
+    });
+  }
+
+  const downloaded = await deps.downloadTextAsset(relativePath, payload, "application/json");
+  await deps.writeBackgroundLog("background.debug", "info", "Exported dashboard logs via downloads API.", {
+    code: "debug.exported_downloads_api",
+    path: downloaded.filename,
+    logCount: debugState.logs.length,
+  });
+  return {
+    path: downloaded.filename,
+    downloadId: downloaded.downloadId,
+    transport: "downloads-api" as const,
+  };
 }
 
 async function enablePlatformForManagedRun(
@@ -140,12 +205,37 @@ function createRuntimeMessageHandlers(
     "artifact-clear-platform-local": async (message) => serviceRuntime.clearPlatformLocalRecords(message.platform),
     "artifact-open-latest": async (message) => deps.openLatestArtifact(message.platform, message.sourceId),
     "artifact-show-folder": async (message) => deps.showLatestArtifactFolder(message.platform, message.sourceId),
-    "dashboard-log-export-request": async () =>
-      deps.downloadTextAsset(
-        `AIexporter/debug/debug-${new Date().toISOString().replace(/[:.]/g, "-")}.json`,
-        JSON.stringify(await deps.loadDebugState(), null, 2),
-        "application/json",
-      ),
+    "artifact-sync-run": async (message) => {
+      const state = await deps.loadQueueState();
+      const result = await syncArtifactsWithDisk(state.settings, message.platform);
+      if (result.requeueEvents.length > 0) {
+        await deps.updateQueueStateWithDerived((current) => ({
+          ...current,
+          items: result.requeueEvents.reduce(
+            (items, event) => mergeDiscoveryEvent(items, event, { kind: "export", priority: "retry", forcePending: true }),
+            current.items,
+          ),
+        }));
+      }
+      await deps.refreshQueueServices();
+      (message.platform ? [message.platform] : SUPPORTED_PLATFORMS).forEach((platform) => {
+        serviceRuntime.requestPlatformTick(platform);
+      });
+      await deps.writeBackgroundLog("background.artifact", "info", "Synchronized artifact index with local export files.", {
+        code: "artifact.sync_completed",
+        platform: message.platform,
+        exportRoot: result.exportRoot,
+        verifiedCount: result.verifiedCount,
+        missingCount: result.missingCount,
+        importedCount: result.importedCount,
+        requeued: result.requeueEvents.length,
+      });
+      return {
+        ok: true,
+        ...result,
+      };
+    },
+    "dashboard-log-export-request": async () => exportDebugSnapshot(deps),
     "debug-clear-request": async () => deps.clearDebugState(),
     "debug-log": async (message, sender) => {
       await deps.writeBackgroundLog(message.entry.scope, message.entry.level, message.entry.message, {
@@ -155,6 +245,21 @@ function createRuntimeMessageHandlers(
       return deps.loadDebugState();
     },
     "debug-state-request": async () => deps.loadDebugState(),
+    "downloads-pick-export-root": async () => {
+      const queueState = await deps.loadQueueState();
+      const currentPath = getConfiguredExportRoot(queueState.settings);
+      const response = await pickFolderWithNativeHost(currentPath);
+      return {
+        path: response.path,
+      };
+    },
+    "downloads-resolve-export-root": async () => {
+      const queueState = await deps.loadQueueState();
+      const response = await resolveExportRootWithNativeHost(getConfiguredExportRoot(queueState.settings));
+      return {
+        path: response.path,
+      };
+    },
     "manual-export-current": async (message, sender) => {
       const tabId = sender.tab?.id;
       if (!tabId) {
@@ -168,21 +273,28 @@ function createRuntimeMessageHandlers(
         state.settings.platforms[platform].navigationTimeoutMs + 15_000,
       );
       const result = await deps.persistBundle(bundle, state.settings);
+      const persistedBundle = result.bundle;
 
       await deps.updateConversationIndex((entries) => {
         let next = upsertConversationIndexEntry(
           entries,
           {
-            platform: bundle.platform,
-            sourceId: bundle.sourceId,
-            url: bundle.url,
-            title: bundle.title,
-            sourceUpdatedAt: bundle.sourceUpdatedAt,
+            platform: persistedBundle.platform,
+            sourceId: persistedBundle.sourceId,
+            url: persistedBundle.url,
+            title: persistedBundle.title,
+            sourceUpdatedAt: persistedBundle.sourceUpdatedAt,
             revisionFingerprint: result.revision,
           },
           "partial",
         );
-        next = markConversationIndexExportResult(next, bundle, result.revision, "exported");
+        next = markConversationIndexExportResult(
+          next,
+          persistedBundle,
+          result.revision,
+          "exported",
+          AIEXPORTER_EXPORT_COMPATIBILITY_VERSION,
+        );
         return next;
       });
       await deps.refreshQueueServices();
@@ -296,7 +408,7 @@ function createRuntimeMessageHandlers(
       SUPPORTED_PLATFORMS.forEach((platform) => {
         serviceRuntime.requestPlatformTick(platform);
       });
-      return deps.loadQueueState();
+      return deps.getQueueStateSnapshot();
     },
     "queue-retry-request": async () => {
       const next = await deps.updateQueueStateWithDerived((current) => ({
@@ -308,7 +420,7 @@ function createRuntimeMessageHandlers(
       });
       return next;
     },
-    "queue-state-request": async () => deps.loadQueueState(),
+    "queue-state-request": async () => deps.getQueueStateSnapshot(),
     "service-discovery-run": async (message) => {
       await enablePlatformForManagedRun(deps, message.platform);
       serviceRuntime.requestPlatformTick(message.platform);
@@ -319,14 +431,14 @@ function createRuntimeMessageHandlers(
       void serviceRuntime.runPlatformDiscoverySweep(message.platform, "full-bootstrap").finally(() => {
         serviceRuntime.requestPlatformTick(message.platform);
       });
-      return deps.loadQueueState();
+      return deps.getQueueStateSnapshot();
     },
     "service-pause": async (message) => serviceRuntime.updatePlatformDesiredRunning(message.platform, false),
     "service-resume": async (message) => {
       await enablePlatformForManagedRun(deps, message.platform);
       return serviceRuntime.updatePlatformDesiredRunning(message.platform, true);
     },
-    "service-state-request": async () => deps.loadQueueState(),
+    "service-state-request": async () => deps.getQueueStateSnapshot(),
     "service-toggle": async (message) => {
       await deps.updateQueueStateWithDerived((current) => ({
         ...current,
@@ -343,7 +455,7 @@ function createRuntimeMessageHandlers(
       }));
       return serviceRuntime.updatePlatformDesiredRunning(message.platform, message.enabled);
     },
-    "settings-get": async () => deps.loadQueueState(),
+    "settings-get": async () => deps.getQueueStateSnapshot(),
     "settings-update": async (message) => {
       const nextState = await deps.updateQueueStateWithDerived((current) => ({
         ...current,

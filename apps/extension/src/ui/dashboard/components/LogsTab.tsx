@@ -7,6 +7,7 @@ import { ActionButton } from "./ActionButton";
 interface LogsTabProps {
   busy: boolean;
   logs: DebugLogEntry[];
+  relatedLogs: DebugLogEntry[];
   logLevels: Record<DebugLogLevel, boolean>;
   logSearch: string;
   logScopeFilter: string;
@@ -62,6 +63,7 @@ function formatTimestamp(value: string): string {
 export function LogsTab({
   busy,
   logs,
+  relatedLogs,
   logLevels,
   logSearch,
   logScopeFilter,
@@ -215,7 +217,49 @@ export function LogsTab({
               <div style={{ fontSize: 12, color: "#94a3b8" }}>
                 {formatTimestamp(detailLogEntry.timestamp)} · {detailLogEntry.scope} · {detailLogEntry.code ?? "-"}
               </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", fontSize: 11, color: "#cbd5e1" }}>
+                {detailLogEntry.sourceId ? <span>sourceId: {detailLogEntry.sourceId}</span> : null}
+                {detailLogEntry.traceId ? <span>traceId: {detailLogEntry.traceId}</span> : null}
+                {detailLogEntry.workerId ? <span>workerId: {detailLogEntry.workerId}</span> : null}
+              </div>
               <div style={{ fontSize: 13, fontWeight: 600 }}>{detailLogEntry.message}</div>
+              {relatedLogs.length > 1 ? (
+                <div style={{ display: "grid", gap: 6 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#cbd5e1" }}>
+                    Related Timeline ({relatedLogs.length})
+                  </div>
+                  <div
+                    style={{
+                      display: "grid",
+                      gap: 6,
+                      border: "1px solid rgba(148, 163, 184, 0.35)",
+                      borderRadius: 10,
+                      padding: 8,
+                      background: "rgba(15, 23, 42, 0.35)",
+                    }}
+                  >
+                    {relatedLogs.map((entry) => (
+                      <div
+                        key={entry.id}
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "76px 48px 1fr",
+                          gap: 8,
+                          fontSize: 11,
+                          color: entry.id === detailLogEntry.id ? "#f8fafc" : "#cbd5e1",
+                          opacity: entry.id === detailLogEntry.id ? 1 : 0.9,
+                        }}
+                      >
+                        <span>{new Date(entry.timestamp).toLocaleTimeString()}</span>
+                        <span style={{ textTransform: "uppercase", color: getLevelColor(entry.level) }}>{entry.level}</span>
+                        <span>
+                          [{entry.scope}] {entry.message}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
               <pre
                 style={{
                   margin: 0,

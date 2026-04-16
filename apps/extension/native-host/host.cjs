@@ -107,6 +107,38 @@ function buildShowFolderPowerShell(targetPath) {
   ].join("; ");
 }
 
+function buildPickFolderPowerShell(initialPath) {
+  const escapedInitialPath = escapePowerShellSingleQuoted(initialPath || "");
+  return [
+    "$ErrorActionPreference = 'Stop'",
+    "Add-Type -AssemblyName System.Windows.Forms",
+    "$dialog = New-Object System.Windows.Forms.FolderBrowserDialog",
+    "$dialog.Description = 'Select AIexporter export folder'",
+    "$dialog.ShowNewFolderButton = $true",
+    `$initialPath = '${escapedInitialPath}'`,
+    "if ($initialPath -and (Test-Path -LiteralPath $initialPath)) { $dialog.SelectedPath = $initialPath }",
+    "$result = $dialog.ShowDialog()",
+    "if ($result -ne [System.Windows.Forms.DialogResult]::OK -or -not $dialog.SelectedPath) { exit 3 }",
+    "Write-Output $dialog.SelectedPath",
+  ].join("; ");
+}
+
+function buildRecyclePathPowerShell(targetPath) {
+  const escapedTarget = escapePowerShellSingleQuoted(targetPath);
+  return [
+    "$ErrorActionPreference = 'Stop'",
+    "Add-Type -AssemblyName Microsoft.VisualBasic",
+    `$targetPath = '${escapedTarget}'`,
+    "if (-not (Test-Path -LiteralPath $targetPath)) { exit 0 }",
+    "$attributes = Get-Item -LiteralPath $targetPath",
+    "if ($attributes.PSIsContainer) {",
+    "  [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory($targetPath, [Microsoft.VisualBasic.FileIO.UIOption]::OnlyErrorDialogs, [Microsoft.VisualBasic.FileIO.RecycleOption]::SendToRecycleBin)",
+    "} else {",
+    "  [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($targetPath, [Microsoft.VisualBasic.FileIO.UIOption]::OnlyErrorDialogs, [Microsoft.VisualBasic.FileIO.RecycleOption]::SendToRecycleBin)",
+    "}",
+  ].join("; ");
+}
+
 function normalizePath(inputPath) {
   if (!inputPath || typeof inputPath !== "string") {
     throw new Error("A valid path is required.");
@@ -178,10 +210,33 @@ function ensureParentDirectory(filePath) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
 }
 
-function relocateFile(sourcePath, relativePath) {
-  const normalizedSource = normalizePath(sourcePath);
+function resolveExportRoot(rootPath) {
+  const candidate = typeof rootPath === "string" && rootPath.trim() ? normalizePath(rootPath.trim()) : getDownloadsDirectory();
+  fs.mkdirSync(candidate, { recursive: true });
+  return candidate;
+}
+
+function resolveTargetPath(relativePath, rootPath) {
+  if (!relativePath || typeof relativePath !== "string") {
+    throw new Error("A valid relativePath is required.");
+  }
+
+  const exportRoot = resolveExportRoot(rootPath);
   const normalizedRelative = relativePath.replace(/[\\/]+/g, path.sep);
-  const targetPath = path.join(getDownloadsDirectory(), normalizedRelative);
+  const targetPath = path.resolve(exportRoot, normalizedRelative);
+  const normalizedRoot = path.resolve(exportRoot);
+  const relativeToRoot = path.relative(normalizedRoot, targetPath);
+
+  if (relativeToRoot.startsWith("..") || path.isAbsolute(relativeToRoot)) {
+    throw new Error("relativePath escaped the configured export root.");
+  }
+
+  return targetPath;
+}
+
+function relocateFile(sourcePath, relativePath, rootPath) {
+  const normalizedSource = normalizePath(sourcePath);
+  const targetPath = resolveTargetPath(relativePath, rootPath);
 
   ensureParentDirectory(targetPath);
   if (fs.existsSync(targetPath)) {
@@ -196,6 +251,104 @@ function relocateFile(sourcePath, relativePath) {
   }
 
   return targetPath;
+}
+
+function movePath(sourcePath, targetPath) {
+  const normalizedSource = normalizePath(sourcePath);
+  const normalizedTarget = normalizePath(targetPath);
+  ensureParentDirectory(normalizedTarget);
+
+  if (!fs.existsSync(normalizedSource)) {
+    throw new Error(`Path does not exist: ${normalizedSource}`);
+  }
+
+  if (fs.existsSync(normalizedTarget)) {
+    fs.rmSync(normalizedTarget, { recursive: true, force: true });
+  }
+
+  fs.renameSync(normalizedSource, normalizedTarget);
+  return normalizedTarget;
+}
+
+function writeFile(relativePath, content, encoding, rootPath) {
+  const targetPath = resolveTargetPath(relativePath, rootPath);
+  ensureParentDirectory(targetPath);
+  if (encoding === "base64") {
+    fs.writeFileSync(targetPath, Buffer.from(typeof content === "string" ? content : "", "base64"));
+  } else {
+    fs.writeFileSync(targetPath, typeof content === "string" ? content : "", "utf8");
+  }
+  return targetPath;
+}
+
+function listFiles(targetPath, pattern, recursive) {
+  const normalizedRoot = normalizePath(targetPath);
+  if (!fs.existsSync(normalizedRoot)) {
+    return [];
+  }
+
+  const matcher = new RegExp(
+    `^${String(pattern || "*")
+      .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+      .replace(/\*/g, ".*")
+      .replace(/\?/g, ".")}$`,
+    "i",
+  );
+  const results = [];
+  const walk = (currentPath) => {
+    const entries = fs.readdirSync(currentPath, { withFileTypes: true });
+    for (const entry of entries) {
+      const nextPath = path.join(currentPath, entry.name);
+      if (entry.isDirectory()) {
+        if (recursive) {
+          walk(nextPath);
+        }
+        continue;
+      }
+      if (matcher.test(entry.name)) {
+        results.push(nextPath);
+      }
+    }
+  };
+
+  walk(normalizedRoot);
+  return results;
+}
+
+function readFileContent(targetPath, encoding) {
+  const normalizedPath = normalizePath(targetPath);
+  if (!fs.existsSync(normalizedPath)) {
+    throw new Error(`Path does not exist: ${normalizedPath}`);
+  }
+
+  if (encoding === "base64") {
+    return fs.readFileSync(normalizedPath).toString("base64");
+  }
+
+  return fs.readFileSync(normalizedPath, "utf8");
+}
+
+function pruneOldFiles(targetPath, pattern, recursive, olderThanDays) {
+  const normalizedRoot = normalizePath(targetPath);
+  if (!fs.existsSync(normalizedRoot)) {
+    return [];
+  }
+
+  const thresholdMs = Math.max(1, Number(olderThanDays) || 0) * 24 * 60 * 60 * 1000;
+  const now = Date.now();
+  const pruned = [];
+  const candidates = listFiles(normalizedRoot, pattern, recursive);
+
+  for (const candidate of candidates) {
+    const stats = fs.statSync(candidate);
+    if (now - stats.mtimeMs < thresholdMs) {
+      continue;
+    }
+    runPowerShell(buildRecyclePathPowerShell(candidate));
+    pruned.push(candidate);
+  }
+
+  return pruned;
 }
 
 function handleMessage(message) {
@@ -232,8 +385,107 @@ function handleMessage(message) {
     if (!message.relativePath || typeof message.relativePath !== "string") {
       throw new Error("A valid relativePath is required.");
     }
-    const relocatedPath = relocateFile(sourcePath, message.relativePath);
+    const relocatedPath = relocateFile(sourcePath, message.relativePath, message.rootPath);
     return { ok: true, action: "relocate-file", path: relocatedPath };
+  }
+
+  if (message.action === "move-path") {
+    const movedPath = movePath(message.sourcePath, message.path);
+    return { ok: true, action: "move-path", path: movedPath };
+  }
+
+  if (message.action === "recycle-path") {
+    const targetPath = normalizePath(message.path);
+    runPowerShell(buildRecyclePathPowerShell(targetPath));
+    return { ok: true, action: "recycle-path", path: targetPath };
+  }
+
+  if (message.action === "path-exists") {
+    const targetPath = normalizePath(message.path);
+    return {
+      ok: true,
+      action: "path-exists",
+      path: fs.existsSync(targetPath) ? targetPath : undefined,
+    };
+  }
+
+  if (message.action === "write-file") {
+    const targetPath = writeFile(message.relativePath, message.content, message.encoding, message.rootPath);
+    return {
+      ok: true,
+      action: "write-file",
+      path: targetPath,
+    };
+  }
+
+  if (message.action === "pick-folder") {
+    const initialPath = typeof message.path === "string" && message.path.trim() ? normalizePath(message.path) : undefined;
+    const result = spawnSync(
+      "powershell.exe",
+      ["-NoProfile", "-NonInteractive", "-STA", "-Command", buildPickFolderPowerShell(initialPath)],
+      {
+        encoding: "utf8",
+        windowsHide: true,
+      },
+    );
+
+    if (result.error) {
+      throw result.error;
+    }
+
+    if (result.status === 3) {
+      return {
+        ok: true,
+        action: "pick-folder",
+      };
+    }
+
+    if (typeof result.status === "number" && result.status !== 0) {
+      const detail = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
+      throw new Error(detail || `PowerShell exited with status ${result.status}`);
+    }
+
+    const pickedPath = result.stdout?.trim();
+    return {
+      ok: true,
+      action: "pick-folder",
+      path: pickedPath || undefined,
+    };
+  }
+
+  if (message.action === "list-files") {
+    const paths = listFiles(message.path, message.pattern, message.recursive !== false);
+    return {
+      ok: true,
+      action: "list-files",
+      paths,
+    };
+  }
+
+  if (message.action === "read-file") {
+    return {
+      ok: true,
+      action: "read-file",
+      content: readFileContent(message.path, message.encoding),
+      path: normalizePath(message.path),
+    };
+  }
+
+  if (message.action === "resolve-export-root") {
+    return {
+      ok: true,
+      action: "resolve-export-root",
+      path: resolveExportRoot(message.rootPath),
+    };
+  }
+
+  if (message.action === "prune-old-files") {
+    const paths = pruneOldFiles(message.path, message.pattern, message.recursive !== false, message.olderThanDays);
+    return {
+      ok: true,
+      action: "prune-old-files",
+      paths,
+    };
   }
 
   throw new Error(`Unsupported action: ${message.action}`);

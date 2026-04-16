@@ -21,6 +21,21 @@ export const MessageSchema = z.object({
 });
 export type Message = z.infer<typeof MessageSchema>;
 
+export interface EmbeddedAssetDescriptor {
+  path: string;
+  mimeType: string;
+  sourceUrl?: string;
+}
+
+export interface LinkedAttachmentDescriptor {
+  messageId: string;
+  kind: "document" | "resource" | "link";
+  title?: string;
+  mimeType?: string;
+  sourceUrl?: string;
+  resourceId?: string;
+}
+
 export const ConversationBundleSchema = z.object({
   platform: SourcePlatformSchema,
   sourceId: z.string().min(1),

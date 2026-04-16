@@ -1,5 +1,5 @@
 import type { PlatformAdapter } from "@aiexporter/adapter-sdk";
-import type { ConversationBundle, Participant } from "@aiexporter/core-schema";
+import { normalizeConversationUrl, type ConversationBundle, type Participant } from "@aiexporter/core-schema";
 import { extractConversationFromDom } from "./dom";
 import { extractSessionIdFromUrl } from "./discovery";
 import type { DeepSeekHistoryResponse, DeepSeekMessage } from "./types";
@@ -54,9 +54,43 @@ function formatThinkingFragment(content: string): string {
   return `> [thinking]\n> ${content.replace(/\n/g, "\n> ")}`;
 }
 
+function collectRemoteAttachments(markdown: string): { images: string[]; documents: string[] } {
+  const urlMatches = markdown.match(/https?:\/\/[^\s)]+/g) ?? [];
+  const images: string[] = [];
+  const documents: string[] = [];
+  urlMatches.forEach((url) => {
+    if (/\.(png|jpe?g|webp|gif|bmp|svg)(\?|#|$)/i.test(url)) {
+      images.push(url);
+      return;
+    }
+    if (/\.(pdf|docx?|xlsx?|pptx?|txt|csv|tsv|md)(\?|#|$)/i.test(url)) {
+      documents.push(url);
+    }
+  });
+  return {
+    images: Array.from(new Set(images)),
+    documents: Array.from(new Set(documents)),
+  };
+}
+
+function appendAttachmentBlocks(markdown: string): string {
+  const attachments = collectRemoteAttachments(markdown);
+  const imageBlocks = attachments.images.map((url) => {
+    const title = url.split("/").pop()?.split("?")[0] || "image";
+    return `![${title}](${url})`;
+  });
+  const documentBlocks = attachments.documents.map((url) => {
+    const title = url.split("/").pop()?.split("?")[0] || "attachment";
+    return `> [attachment] [${title}](${url})`;
+  });
+  const appended = [...imageBlocks, ...documentBlocks].filter(Boolean);
+  if (appended.length === 0) return markdown;
+  return `${markdown}\n\n${appended.join("\n\n")}`.trim();
+}
+
 function extractMessageMarkdown(message: DeepSeekMessage): string | undefined {
   const direct = message.content?.trim();
-  if (direct) return direct;
+  if (direct) return appendAttachmentBlocks(direct);
 
   const fragmentBlocks =
     message.fragments
@@ -72,7 +106,7 @@ function extractMessageMarkdown(message: DeepSeekMessage): string | undefined {
   }
 
   if (fragmentBlocks.length === 0) return undefined;
-  return fragmentBlocks.join("\n\n");
+  return appendAttachmentBlocks(fragmentBlocks.join("\n\n"));
 }
 
 export function parseHistoryResponse(
@@ -128,7 +162,8 @@ export const deepseekAdapter: PlatformAdapter = {
     return /^https:\/\/chat\.deepseek\.com\//i.test(url);
   },
   async extractCurrentConversation(ctx) {
-    const sourceId = extractSessionIdFromUrl(ctx.location.href);
+    const normalizedUrl = normalizeConversationUrl(ctx.location.href);
+    const sourceId = extractSessionIdFromUrl(normalizedUrl);
     if (!sourceId) {
       throw new Error("Current page is not a DeepSeek conversation URL.");
     }
@@ -141,7 +176,7 @@ export const deepseekAdapter: PlatformAdapter = {
     return {
       platform: "deepseek",
       sourceId,
-      url: ctx.location.href,
+      url: normalizedUrl,
       title: domFallback.title,
       extractedAt: new Date().toISOString(),
       sourceUpdatedAt: domFallback.messages[domFallback.messages.length - 1]?.createdAt,

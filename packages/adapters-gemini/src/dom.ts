@@ -1,4 +1,4 @@
-import type { ConversationBundle, Message } from "@aiexporter/core-schema";
+import { normalizeConversationTitle, type ConversationBundle, type Message } from "@aiexporter/core-schema";
 import { createMarkdownConverter } from "./turndown";
 
 function getView(document: Document): Window {
@@ -64,7 +64,7 @@ function findPrimaryScrollContainer(document: Document): HTMLElement | null {
     }
   }
 
-  return document.scrollingElement instanceof HTMLElement ? document.scrollingElement : null;
+  return document.scrollingElement as HTMLElement | null;
 }
 
 export async function hydrateScrollableConversation(
@@ -137,13 +137,14 @@ function extractGeminiPromptTitleFallback(document: Document): string | undefine
 }
 
 function getGeminiTitle(document: Document): string | undefined {
-  return (
-    getElementText(document.querySelector<HTMLElement>('[data-test-id="conversation-title"]')) ||
-    getElementText(document.querySelector<HTMLAnchorElement>('a[href*="/app/"][aria-current="page"]')) ||
-    extractGeminiPromptTitleFallback(document) ||
-    document.title.replace(/\s*\|\s*Google Gemini\s*$/i, "").trim() ||
-    undefined
+  const headerTitle = normalizeConversationTitle(
+    getElementText(document.querySelector<HTMLElement>('[data-test-id="conversation-title"]')),
   );
+  const sidebarTitle = normalizeConversationTitle(
+    getElementText(document.querySelector<HTMLAnchorElement>('a[href*="/app/"][aria-current="page"]')),
+  );
+  const pageTitle = normalizeConversationTitle(document.title.replace(/\s*\|\s*Google Gemini\s*$/i, "").trim());
+  return headerTitle || sidebarTitle || pageTitle || extractGeminiPromptTitleFallback(document) || undefined;
 }
 
 export function extractGeminiConversationFromDom(document: Document, url: string, sourceId: string): ConversationBundle {
@@ -223,45 +224,133 @@ function collectAiStudioMeta(document: Document): Record<string, unknown> {
 
 function normalizeAiStudioText(text: string): string {
   return text
-    .replace(/\b(edit|more_vert|thumb_up|thumb_down|chevron_right|chevron_left|chevron_more)\b/gi, " ")
-    .replace(/\b(Model \d{1,2}:\d{2})\b/g, " ")
-    .replace(/\bThoughts?\b/gi, " ")
-    .replace(/\bExpand to view model thoughts\b/gi, " ")
-    .replace(/\bResponse ready\.?\b/gi, " ")
-    .replace(/\s+/g, " ")
+    .replace(/\r\n?/g, "\n")
+    .replace(/^[ \t]+|[ \t]+$/gm, "")
+    .replace(/(^|\n)\s*(edit|more_vert|thumb_up|thumb_down|chevron_right|chevron_left|chevron_more)\s*(?=\n|$)/gi, "\n")
+    .replace(/(^|\n)\s*Model \d{1,2}:\d{2}\s*(?=\n|$)/g, "\n")
+    .replace(/(^|\n)\s*Thoughts?\s*(?=\n|$)/gi, "\n")
+    .replace(/(^|\n)\s*Expand to view model thoughts\s*(?=\n|$)/gi, "\n")
+    .replace(/(^|\n)\s*Response ready\.?\s*(?=\n|$)/gi, "\n")
+    .replace(/(\*\*[^*\n]+\*\*)[ \t]+(?=\S)/g, "$1\n\n")
+    .replace(/(^|\n)(\*\*[^*\n]+\*\*)\s+\2(?=\n|$)/g, "$1$2")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
-function hasMeaningfulAiStudioText(turn: HTMLElement): boolean {
-  const textareaText = Array.from(turn.querySelectorAll<HTMLTextAreaElement>("textarea"))
-    .map((textarea) => textarea.value.trim())
-    .join(" ")
-    .trim();
-  if (textareaText.length > 0) return true;
+function dedupeAdjacentMarkdownBlocks(blocks: string[]): string[] {
+  const deduped: string[] = [];
+  let lastNormalized = "";
 
-  const root =
-    turn.querySelector<HTMLElement>("ms-text-chunk, ms-cmark-node, ms-prompt-chunk, .turn-content") ?? turn;
-  return normalizeAiStudioText(getElementText(root)).length > 0;
-}
-
-async function expandAiStudioEditableTurns(document: Document): Promise<void> {
-  const view = getView(document);
-  const editButtons = Array.from(
-    document.querySelectorAll<HTMLButtonElement>('ms-chat-turn .toggle-edit-button, ms-chat-turn button[aria-label="Edit"]'),
-  );
-  for (const button of editButtons) {
-    if (button.disabled) continue;
-    const turn = button.closest<HTMLElement>("ms-chat-turn");
-    if (turn && hasMeaningfulAiStudioText(turn)) continue;
-    button.click();
-    await new Promise((resolve) => view.setTimeout(resolve, 200));
+  for (const block of blocks) {
+    const normalized = normalizeAiStudioText(block);
+    if (!normalized) continue;
+    if (normalized === lastNormalized) continue;
+    deduped.push(normalized);
+    lastNormalized = normalized;
   }
+
+  return deduped;
+}
+
+function filterTopLevelElements(elements: HTMLElement[]): HTMLElement[] {
+  return elements.filter(
+    (element) => !elements.some((candidate) => candidate !== element && candidate.contains(element)),
+  );
+}
+
+interface AiStudioTurnSnapshot {
+  id: string;
+  role: "user" | "assistant";
+  order: number;
+  markdown: string;
+}
+
+function buildAiStudioTurnSnapshot(turn: HTMLElement, index: number): AiStudioTurnSnapshot | null {
+  const roleContainer = turn.querySelector<HTMLElement>(".chat-turn-container");
+  const role = roleContainer?.classList.contains("user") ? "user" : "assistant";
+  const markdown = extractAiStudioTurnMarkdown(turn, role);
+  if (!markdown) return null;
+
+  return {
+    id: turn.id || `${role}-${index + 1}`,
+    role,
+    order: index,
+    markdown,
+  };
+}
+
+function captureVisibleAiStudioTurns(document: Document, collected: Map<string, AiStudioTurnSnapshot>): void {
+  Array.from(document.querySelectorAll<HTMLElement>("ms-chat-turn")).forEach((turn, index) => {
+    const snapshot = buildAiStudioTurnSnapshot(turn, index);
+    if (!snapshot) return;
+
+    const existing = collected.get(snapshot.id);
+    if (!existing || snapshot.markdown.length > existing.markdown.length) {
+      collected.set(snapshot.id, snapshot);
+    }
+  });
+}
+
+async function collectAiStudioMessagesViaScroll(document: Document): Promise<Message[]> {
+  const view = getView(document);
+  const collected = new Map<string, AiStudioTurnSnapshot>();
+  const container = findPrimaryScrollContainer(document);
+
+  if (!container) {
+    captureVisibleAiStudioTurns(document, collected);
+    return Array.from(collected.values())
+      .sort((left, right) => left.order - right.order)
+      .map(({ id, role, markdown }) => ({ id, role, markdown }));
+  }
+
+  const originalScrollTop = container.scrollTop;
+  const maxSteps = 120;
+  const settleMs = 600;
+  const stepSize = Math.max(480, container.clientHeight * 0.85);
+  let stableRounds = 0;
+  let lastSignature = "";
+
+  container.scrollTop = 0;
+  await new Promise((resolve) => view.setTimeout(resolve, settleMs));
+
+  for (let step = 0; step < maxSteps; step += 1) {
+    captureVisibleAiStudioTurns(document, collected);
+
+    const signature = Array.from(collected.keys()).join("|");
+    stableRounds = signature === lastSignature ? stableRounds + 1 : 0;
+    lastSignature = signature;
+
+    const nextTop = Math.min(
+      Math.max(0, container.scrollHeight - container.clientHeight),
+      container.scrollTop + stepSize,
+    );
+    if (nextTop === container.scrollTop) {
+      stableRounds += 1;
+    } else {
+      container.scrollTop = nextTop;
+      container.dispatchEvent(new Event("scroll", { bubbles: true }));
+      await new Promise((resolve) => view.setTimeout(resolve, settleMs));
+    }
+
+    if (container.scrollTop + container.clientHeight >= container.scrollHeight - 4 && stableRounds >= 2) {
+      break;
+    }
+  }
+
+  captureVisibleAiStudioTurns(document, collected);
+  container.scrollTop = originalScrollTop;
+  container.dispatchEvent(new Event("scroll", { bubbles: true }));
+
+  return Array.from(collected.values())
+    .sort((left, right) => left.order - right.order)
+    .map(({ id, role, markdown }) => ({ id, role, markdown }));
 }
 
 function getAiStudioTitle(document: Document): string | undefined {
   return (
-    document.title.replace(/\s*\|\s*Google AI Studio\s*$/i, "").trim() ||
-    getElementText(document.querySelector<HTMLElement>("title")) ||
+    normalizeConversationTitle(document.title.replace(/\s*\|\s*Google AI Studio\s*$/i, "").trim()) ||
+    normalizeConversationTitle(getElementText(document.querySelector<HTMLElement>("title"))) ||
     undefined
   );
 }
@@ -297,29 +386,43 @@ function extractAiStudioTurnMarkdown(turn: HTMLElement, role: "user" | "assistan
   const blocks: string[] = [];
   const thoughtChunk = turn.querySelector<HTMLElement>("ms-thought-chunk");
   if (thoughtChunk) {
-    const thoughtRoots = Array.from(
+    const thoughtRoots = filterTopLevelElements(
+      Array.from(
       thoughtChunk.querySelectorAll<HTMLElement>("ms-text-chunk, ms-cmark-node, p, li, pre, code, blockquote"),
+      ),
     );
-    const thoughtSource = thoughtRoots.length > 0 ? uniqMarkdown(thoughtRoots.map((root) => turndownAiStudioNode(root))).join("\n\n") : turndownAiStudioNode(thoughtChunk);
+    const thoughtSource =
+      thoughtRoots.length > 0
+        ? dedupeAdjacentMarkdownBlocks(thoughtRoots.map((root) => turndownAiStudioNode(root))).join("\n\n")
+        : normalizeAiStudioText(turndownAiStudioNode(thoughtChunk));
     const thoughtText = normalizeAiStudioText(thoughtSource);
     if (thoughtText) {
-      blocks.push(`> [thinking] ${thoughtText}`);
+      const quotedThought = ["> [thinking]"]
+        .concat(
+          thoughtText.split("\n").map((line) => (line.trim().length > 0 ? `> ${line}` : ">")),
+        )
+        .join("\n");
+      blocks.push(quotedThought);
     }
   }
 
-  const responseRoots = Array.from(
-    turn.querySelectorAll<HTMLElement>(
-      [
-        ".model-prompt-container ms-text-chunk",
-        ".model-prompt-container ms-cmark-node.v3-font-body",
-        ".model-prompt-container pre",
-        ".model-prompt-container table",
-      ].join(", "),
-    ),
-  ).filter((root) => !root.closest("ms-thought-chunk"));
+  const responseRoots = filterTopLevelElements(
+    Array.from(
+      turn.querySelectorAll<HTMLElement>(
+        [
+          ".model-prompt-container ms-text-chunk",
+          ".model-prompt-container ms-cmark-node.v3-font-body",
+          ".model-prompt-container pre",
+          ".model-prompt-container table",
+          ".model-prompt-container img",
+          ".model-prompt-container figure",
+        ].join(", "),
+      ),
+    ).filter((root) => !root.closest("ms-thought-chunk")),
+  );
 
   if (responseRoots.length > 0) {
-    uniqMarkdown(responseRoots.map((root) => normalizeAiStudioText(turndownAiStudioNode(root)))).forEach((block) => {
+    dedupeAdjacentMarkdownBlocks(responseRoots.map((root) => turndownAiStudioNode(root))).forEach((block) => {
       if (block) blocks.push(block);
     });
   } else if (!thoughtChunk) {
@@ -335,23 +438,8 @@ function extractAiStudioTurnMarkdown(turn: HTMLElement, role: "user" | "assistan
 }
 
 export async function extractAiStudioConversationFromDom(document: Document, url: string, sourceId: string): Promise<ConversationBundle> {
-  await expandAiStudioEditableTurns(document);
-
-  const messages: Message[] = [];
+  const messages = await collectAiStudioMessagesViaScroll(document);
   const title = getAiStudioTitle(document);
-  const turns = Array.from(document.querySelectorAll<HTMLElement>("ms-chat-turn"));
-  turns.forEach((turn, index) => {
-    const roleContainer = turn.querySelector<HTMLElement>(".chat-turn-container");
-    const role = roleContainer?.classList.contains("user") ? "user" : "assistant";
-    const markdown = extractAiStudioTurnMarkdown(turn, role);
-
-    if (markdown.length === 0) return;
-    messages.push({
-      id: turn.id || `${role}-${index + 1}`,
-      role,
-      markdown,
-    });
-  });
 
   if (!messages.some((message) => message.role === "user") && title) {
     messages.unshift({

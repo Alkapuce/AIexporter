@@ -97,6 +97,48 @@ export function normalizeLogPlatform(entry: DebugLogEntry): SourcePlatform | und
   return undefined;
 }
 
+export function getDashboardLogSourceId(entry: DebugLogEntry): string | undefined {
+  if (entry.sourceId) return entry.sourceId;
+  return typeof entry.details?.sourceId === "string" ? entry.details.sourceId : undefined;
+}
+
+export function getDashboardLogTraceId(entry: DebugLogEntry): string | undefined {
+  if (entry.traceId) return entry.traceId;
+  return typeof entry.details?.traceId === "string" ? entry.details.traceId : undefined;
+}
+
+export function getDashboardLogWorkerId(entry: DebugLogEntry): string | undefined {
+  if (entry.workerId) return entry.workerId;
+  return typeof entry.details?.workerId === "string" ? entry.details.workerId : undefined;
+}
+
+export function buildRelatedDashboardLogs(logs: DebugLogEntry[], target: DebugLogEntry | null): DebugLogEntry[] {
+  if (!target) return [];
+
+  const sourceId = getDashboardLogSourceId(target);
+  if (sourceId) {
+    return logs
+      .filter((entry) => getDashboardLogSourceId(entry) === sourceId)
+      .sort((left, right) => Date.parse(left.timestamp) - Date.parse(right.timestamp));
+  }
+
+  const traceId = getDashboardLogTraceId(target);
+  if (traceId) {
+    return logs
+      .filter((entry) => getDashboardLogTraceId(entry) === traceId)
+      .sort((left, right) => Date.parse(left.timestamp) - Date.parse(right.timestamp));
+  }
+
+  const workerId = getDashboardLogWorkerId(target);
+  if (workerId) {
+    return logs
+      .filter((entry) => getDashboardLogWorkerId(entry) === workerId)
+      .sort((left, right) => Date.parse(left.timestamp) - Date.parse(right.timestamp));
+  }
+
+  return [target];
+}
+
 function isStatusFilterMatch(filter: string, status: QueueItemStatus): boolean {
   return filter === "all" || filter === status;
 }

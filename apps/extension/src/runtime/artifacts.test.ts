@@ -52,7 +52,7 @@ describe("artifact helpers", () => {
           ...DEFAULT_EXTENSION_SETTINGS.downloads,
           skipIfLatestExists: true,
         },
-      }),
+      }, "compat-1", "compat-1"),
     ).toBe(true);
   });
 
@@ -80,7 +80,26 @@ describe("artifact helpers", () => {
           ...DEFAULT_EXTENSION_SETTINGS.downloads,
           skipIfLatestExists: false,
         },
-      }),
+      }, "compat-1", "compat-1"),
+    ).toBe(false);
+  });
+
+  it("does not skip when the latest artifact was exported by an older compatibility version", () => {
+    const latest = findLatestArtifactForConversation(artifacts, "deepseek", "conv-1");
+    expect(
+      shouldSkipPersist(
+        latest,
+        "rev-3",
+        {
+          ...DEFAULT_EXTENSION_SETTINGS,
+          downloads: {
+            ...DEFAULT_EXTENSION_SETTINGS.downloads,
+            skipIfLatestExists: true,
+          },
+        },
+        "compat-1",
+        "compat-2",
+      ),
     ).toBe(false);
   });
 

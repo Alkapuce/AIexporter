@@ -23,8 +23,12 @@ export interface BridgeNetworkPayload {
 export interface MainWorldBridgeMessage {
   type:
     | "chatgpt-network-discovery"
+    | "chatgpt-page-api-response"
+    | "gemini-network-discovery"
+    | "gemini-page-api-response"
     | "deepseek-network-discovery"
-    | "deepseek-page-api-response";
+    | "deepseek-page-api-response"
+    ;
   payload?: BridgeNetworkPayload;
   requestId?: string;
   sourceId?: string;
@@ -60,6 +64,10 @@ export interface PlatformRuntimeConfig {
   bootstrapWindowMode: "dedicated_window" | "background_tab";
   discoveryReadyTimeoutMs: number;
   discoveryScrollStableRounds: number;
+  discoveryDomMaxCycles: number;
+  discoveryDomPostScrollWaitMs: number;
+  discoveryDomStableCycles: number;
+  discoveryDomScrollBottomAttempts: number;
   receiverReadyTimeoutMs: number;
   receiverRetryLimit: number;
   apiExtractMode: "page_world_first";
@@ -79,6 +87,9 @@ export interface DownloadSettings {
   skipIfLatestExists: boolean;
   retainLocalRevisionCount: number;
   openFileActionsEnabled: boolean;
+  exportRootPath?: string;
+  revisionHistoryMode?: "disabled" | "recycle_previous" | "archive_then_recycle";
+  archiveRetentionDays?: number;
 }
 
 export type RuntimeMessage =
@@ -92,6 +103,11 @@ export type RuntimeMessage =
       mode?: "best-effort" | "full-bootstrap";
       readyTimeoutMs?: number;
       stableRounds?: number;
+      expectedCount?: number;
+      domMaxCycles?: number;
+      domPostScrollWaitMs?: number;
+      domStableCycles?: number;
+      domScrollBottomAttempts?: number;
     }
   | { type: "service-full-bootstrap-run"; platform: SourcePlatform }
   | { type: "queue-state-request" }
@@ -112,6 +128,9 @@ export type RuntimeMessage =
   | { type: "artifact-clear-platform-local"; platform: SourcePlatform }
   | { type: "artifact-open-latest"; platform: SourcePlatform; sourceId: string }
   | { type: "artifact-show-folder"; platform: SourcePlatform; sourceId: string }
+  | { type: "artifact-sync-run"; platform?: SourcePlatform }
+  | { type: "downloads-pick-export-root" }
+  | { type: "downloads-resolve-export-root" }
   | { type: "queue-item-force-export"; key: string }
   | { type: "debug-clear-request" }
   | { type: "dashboard-log-export-request" }
@@ -195,6 +214,7 @@ export interface ConversationIndexEntry {
   discoveryState: "partial" | "complete";
   exportState: "never_exported" | "exported" | "failed" | "pending";
   latestExportRevision?: string;
+  latestExportCompatibilityVersion?: string;
 }
 
 export interface ExportArtifactEntry {
@@ -206,7 +226,8 @@ export interface ExportArtifactEntry {
   markdownFilename?: string;
   bundleFilename?: string;
   exportedAt: string;
-  localStatus?: "present" | "missing" | "deleted" | "skipped_existing";
+  archivedAt?: string;
+  localStatus?: "present" | "missing" | "deleted" | "skipped_existing" | "archived";
   isLatestForConversation?: boolean;
 }
 

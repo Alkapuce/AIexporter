@@ -88,4 +88,53 @@ export default defineUnlistedScript(() => {
 
     return originalSend.apply(this, args);
   };
+
+  window.addEventListener("message", (event) => {
+    if (event.source !== window) return;
+    if (event.data?.source !== "aiexporter" || event.data?.type !== "aiexporter.chatgpt.fetch-conversation") return;
+
+    const requestId = typeof event.data.requestId === "string" ? event.data.requestId : "";
+    const sourceId = typeof event.data.sourceId === "string" ? event.data.sourceId : "";
+    if (!requestId || !sourceId) return;
+
+    void fetch(`/backend-api/conversation/${encodeURIComponent(sourceId)}`, {
+      credentials: "include",
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(`ChatGPT backend API responded with ${response.status}.`);
+        }
+        return response.json();
+      })
+      .then((data) => {
+        window.postMessage(
+          {
+            source: "aiexporter",
+            type: "chatgpt-page-api-response",
+            requestId,
+            sourceId,
+            response: {
+              ok: true,
+              data,
+            },
+          },
+          window.location.origin,
+        );
+      })
+      .catch((error) => {
+        window.postMessage(
+          {
+            source: "aiexporter",
+            type: "chatgpt-page-api-response",
+            requestId,
+            sourceId,
+            response: {
+              ok: false,
+              error: error instanceof Error ? error.message : "ChatGPT backend API request failed.",
+            },
+          },
+          window.location.origin,
+        );
+      });
+  });
 });
