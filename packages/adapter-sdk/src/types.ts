@@ -80,6 +80,7 @@ export interface SchedulerSettings {
 }
 
 export type UiLocale = "zh-CN" | "en";
+export type UiThemeMode = "system" | "light" | "dark";
 
 export interface DownloadSettings {
   mode: "downloads-api";
@@ -160,6 +161,7 @@ export interface ExtensionSettings {
   serverUrl: string;
   browserLabel: string;
   uiLocale: UiLocale;
+  uiThemeMode: UiThemeMode;
   dashboardOpenBehavior: "tab";
   scheduler: SchedulerSettings;
   downloads: DownloadSettings;

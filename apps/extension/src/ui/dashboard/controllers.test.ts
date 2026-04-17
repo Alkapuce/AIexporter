@@ -20,6 +20,7 @@ const baseSettings: ExtensionSettings = {
   serverUrl: "http://127.0.0.1:8787",
   browserLabel: "Edge",
   uiLocale: "zh-CN",
+  uiThemeMode: "system",
   dashboardOpenBehavior: "tab",
   scheduler: {
     autoStartOnBrowserLaunch: true,

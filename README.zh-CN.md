@@ -2,283 +2,159 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-AIexporter 是一个基于 pnpm workspaces 的 monorepo，用于把浏览器中的 AI 对话导出为规范化 Markdown 档案，并可选同步到本地归档服务。
+一个浏览器扩展，自动将 AI 对话（ChatGPT、DeepSeek、Gemini、AI Studio）导出为干净、可移植的 Markdown 档案。
 
-当前仓库以 Windows-first 的开发与验证流程为主，包含：
+基于 pnpm monorepo 构建，包含 WXT Chromium 扩展、后台队列编排，以及可选的本地 Fastify 归档服务。
 
-- 基于 WXT 的 Chromium 扩展
-- 带队列与 worker 调度的后台导出编排
-- 通过 Downloads API 落地本地 Markdown 与 bundle
-- 通过 Windows native host 实现“打开文件 / 定位目录”增强动作
-- 基于 Fastify + SQLite 的本地归档服务
+## 功能概览
 
-## 当前状态
+- 通过页面级网络拦截和 DOM 观察，自动发现支持平台上的对话
+- 后台队列调度 worker tab 完成导出
+- 将标准化的 Markdown + JSON bundle 写入可配置的本地目录
+- 可选同步到本地 Fastify + SQLite 归档服务
+- 提供 Dashboard UI 用于队列监控、设置调整和文件操作
 
-| 模块 | 状态 |
-| --- | --- |
-| ChatGPT 扩展流程 | 已实现 |
-| DeepSeek 扩展流程 | 已实现，包含专门的发现与 worker 逻辑 |
-| Gemini 扩展流程 | 已接入，采用保守的 DOM-first 发现与导出 |
-| AI Studio 扩展流程 | 已接入，支持 DOM-first 发现、导出与运行配置元数据 |
-| Dashboard / Popup 控制界面 | 已实现多平台控制与队列可视化 |
-| 本地 Markdown 导出 | 已实现 |
-| 本地 artifact 索引 | 已实现 |
-| Native host 文件动作 | 已实现，带浏览器 fallback |
-| Fastify 归档服务 | 已实现 |
-| 浏览器归档查看器 | 未实现 |
+## 平台支持
+
+| 平台 | 发现方式 | 导出 | 思考过程 | 附件 |
+| --- | --- | --- | --- | --- |
+| ChatGPT | 网络拦截 | 完整对话 | 支持 | — |
+| DeepSeek | 网络 + 历史 sweep | 完整对话 | 支持 | — |
+| Gemini | DOM + RPC 响应解析 | 完整对话 | 支持 | 图片、链接 |
+| AI Studio | DOM + library 页 sweep | 完整对话 | 支持 | — |
 
 ## 仓库结构
 
-```text
-apps/
-  extension/   WXT Chromium 扩展
-  server/      Fastify 归档与查询服务
-packages/
-  adapter-sdk/         共享 runtime 协议与默认配置
-  adapters-chatgpt/    ChatGPT 提取辅助
-  adapters-deepseek/   DeepSeek 提取与发现辅助
-  adapters-gemini/     Gemini 与 AI Studio 提取 / 发现辅助
-  core-markdown/       统一 Markdown 序列化器
-  core-schema/         共享 schema 与 bundle 类型
-docs/
-  browser-live-testing.md  Edge/CDP/Playwright 实测说明
-  PLAN.md              初始阶段方案文档
-  refactor-roadmap.md  当前重构结果与下一步优先级
 ```
-
-## 核心架构
-
-### 扩展侧数据流
-
-1. 内容脚本进入受支持的对话页面。
-2. 页面主世界桥接脚本在可用时收集网络层发现信号。
-3. background service worker 把发现事件去重并写入导出队列。
-4. 平台 worker tab 加载目标对话，并向内容脚本请求完整提取。
-5. 扩展将标准化 bundle 序列化为 Markdown 与 JSON。
-6. 产物通过浏览器 Downloads API 持久化到本地。
-7. 如果开启 server sync，同一份 bundle 会继续投递到本地 Fastify 服务。
-
-### 本轮重构后的 background 分层
-
-background 运行时不再由一个超大入口文件承载所有逻辑。
-
-- `apps/extension/entrypoints/background.ts` 只负责 bootstrap 和浏览器事件接线。
-- `apps/extension/src/background/runtime-router.ts` 负责 runtime message 路由。
-- `apps/extension/src/background/service-runtime.ts` 负责队列编排、worker 调度与平台 tick。
-- `apps/extension/src/background/tab-runtime.ts` 负责内容脚本通信与 worker tab 就绪检测。
-- `apps/extension/src/background/artifact-persistence.ts` 负责 artifact 写入、裁剪与 native-host 文件动作。
-- `apps/extension/src/background/state-access.ts` 负责 queue state 归一化与派生状态更新。
-- `apps/extension/src/background/shared.ts` 负责共享常量与归档命名辅助函数。
-
-当前结构债和下一轮目标见 `docs/refactor-roadmap.md`。
-
-## 平台支持面
-
-### ChatGPT
-
-- 当前对话提取
-- 队列驱动导出
-- 本地持久化
-- 可选 server sync
-
-### DeepSeek
-
-- 页面活动驱动的被动发现
-- 历史会话 sweep 支持
-- 专门的 worker tab 生命周期处理
-- 本地持久化
-- 可选 server sync
-
-### Gemini
-
-- 当前对话提取
-- 带懒加载处理的 DOM 历史发现
-- worker 驱动导出与本地持久化
-- 面向 Google 站点的保守节流策略
-
-### AI Studio
-
-- 当前 prompt/chat 提取
-- 基于 `/library` 页的历史发现
-- 运行配置元数据提取
-- worker 驱动导出与本地持久化
-
-## 环境要求
-
-当前工作区已验证环境：
-
-- Node.js 22+
-- pnpm 10+
-- Windows 下的 PowerShell 7
-
-扩展目标浏览器是 Chromium 系。当前 native-host 增强动作仅针对 Windows。
+apps/
+  extension/        WXT Chromium 扩展（内容脚本、后台、Dashboard）
+  server/           Fastify + SQLite 归档 API
+packages/
+  adapter-sdk/      共享 runtime 协议、默认配置、指纹计算
+  adapters-chatgpt/ ChatGPT 提取与发现
+  adapters-deepseek/DeepSeek 提取与发现
+  adapters-gemini/  Gemini + AI Studio 提取、RPC 解析、发现
+  core-markdown/    Markdown 序列化器（frontmatter、多格式变体）
+  core-schema/      共享类型、bundle schema、标题/URL 规范化
+```
 
 ## 快速开始
 
-### 1. 安装依赖
+需要 Node.js 22+、pnpm 10+。Windows 环境可使用 native-host 增强功能。
 
-```powershell
-corepack pnpm install
+```bash
+corepack pnpm install        # 安装依赖
+corepack pnpm typecheck      # 全工作区类型检查
+corepack pnpm test           # 运行所有 Vitest 测试
+corepack pnpm build          # 构建全部
 ```
 
-### 2. 跑通已验证检查
+### 启动扩展
 
-```powershell
-corepack pnpm typecheck
-corepack pnpm test
-corepack pnpm build
+```bash
+corepack pnpm dev:ext        # WXT 开发模式，支持热重载
 ```
 
-这些命令是当前仓库的基线，在发布或归档前应保持全绿。
+从 `apps/extension/.output/chrome-mv3` 加载解压扩展到 Chromium 浏览器。
 
-### 3. 启动本地归档服务
+### 启动归档服务（可选）
 
-```powershell
-corepack pnpm dev:server
+```bash
+corepack pnpm dev:server     # http://127.0.0.1:8787
 ```
 
-默认地址：`http://127.0.0.1:8787`
+## 工作原理
 
-### 4. 构建或启动扩展
+1. 内容脚本检测支持的对话页面
+2. 主世界桥接脚本拦截网络响应获取发现信号
+3. Background service worker 将事件去重后写入平台队列
+4. Worker tab 加载对话并通过内容脚本提取结构化数据
+5. Bundle 序列化为 Markdown（含 YAML frontmatter）和 JSON
+6. 产物通过 native host 或 Downloads API 写入配置的导出目录
+7. 如开启 server sync，bundle 同时 POST 到 Fastify 服务
 
-开发模式：
+### Background 架构
 
-```powershell
-corepack pnpm dev:ext
-```
+后台运行时拆分为职责明确的模块：
 
-单次构建：
-
-```powershell
-corepack pnpm --filter @aiexporter/extension build
-```
-
-解压扩展目录输出到：
-
-```text
-apps/extension/.output/chrome-mv3
-```
-
-## Native host 集成
-
-Windows native-host 相关文件位于 `apps/extension/native-host/`。
-
-它主要服务 dashboard 里的两个动作：
-
-- 用系统默认方式打开最新导出的 Markdown
-- 在资源管理器中定位导出目录或文件
-
-如果 native host 不可用，扩展会尽量退化到浏览器下载动作。
-
-相关实现文件：
-
-- `apps/extension/native-host/host.cjs`
-- `apps/extension/native-host/manifest.json`
-- `apps/extension/scripts/register-native-host.ps1`
-- `apps/extension/src/runtime/native-host.ts`
-
-当前 native host 会优先解析 Windows 的 Downloads 已知文件夹，因此 OneDrive 重定向后的 Downloads 路径也会被正确使用。
+- `service-runtime.ts` — 队列编排、worker 调度、平台 tick、challenge 检测
+- `runtime-router.ts` — background、内容脚本、dashboard 间的消息路由
+- `tab-runtime.ts` — worker tab 生命周期、内容脚本就绪检测
+- `artifact-persistence.ts` — 文件写入、裁剪、导出目录解析
+- `artifact-sync.ts` — artifact 校验与磁盘重导入
+- `state-access.ts` — 队列状态归一化与派生更新
+- `export-root.ts` — 可配置导出目录支持
 
 ## Archive 格式
 
-本地和服务端归档共用统一布局：
+导出遵循统一的目录结构：
 
-```text
-AIexporter/<platform>/<conversation-folder>/<revision>/
+```
+<导出根目录>/AIexporter/<platform>/<conversation-folder>/<revision>/
   <artifact>.md
   <artifact>.bundle.json
 ```
 
-Markdown 文件包含类似如下的 frontmatter：
+Markdown frontmatter 示例：
 
 ```yaml
 ---
-aiexporter: v1
-platform: deepseek
-conversation_id: conv-123
-title: Planning Session
-source_url: https://chat.deepseek.com/a/chat/s/conv-123
-source_updated_at: 2026-03-18T08:00:00.000Z
-exported_at: 2026-03-18T08:01:10.000Z
-message_count: 12
-revision: 4c7...
+aiexporter: 2026-04-15.2
+platform: gemini
+conversation_id: abc123
+title: 构建 REST API
+source_url: https://gemini.google.com/app/abc123
+source_updated_at: 2026-04-10T12:00:00.000Z
+exported_at: 2026-04-10T12:01:30.000Z
+message_count: 24
+revision: f7a...
 ---
 ```
 
-扩展本地还会维护以下索引：
+## Native Host（Windows）
 
-- 已发现会话索引
-- 导出队列状态
-- 本地 artifact 索引
-- debug 日志
+可选的 native host（`apps/extension/native-host/`）提供：
+
+- 通过文件夹选择对话框自定义导出目录
+- 用系统默认程序打开导出文件
+- 在资源管理器中定位导出目录
+- 将文件移至回收站
+- 解析 OneDrive 重定向的 Downloads 路径
+
+注册方式：
+
+```powershell
+pwsh -File apps/extension/scripts/register-native-host.ps1
+```
+
+不可用时自动退化到浏览器 Downloads API。
 
 ## Server API
 
-当前 Fastify 服务暴露：
+Fastify 归档服务提供：
 
-- `POST /api/v1/ingest/conversations`
-- `GET /api/v1/conversations?platform=&q=&limit=&cursor=`
-- `GET /api/v1/conversations/:platform/:sourceId`
-- `GET /healthz`
+| 端点 | 说明 |
+| --- | --- |
+| `POST /api/v1/ingest/conversations` | 导入对话 bundle |
+| `GET /api/v1/conversations` | 列表/搜索对话 |
+| `GET /api/v1/conversations/:platform/:sourceId` | 获取指定对话 |
+| `GET /healthz` | 健康检查 |
 
-服务端源码位于 `apps/server/src/`。
+## Dashboard
 
-## 验证流程
+扩展 Dashboard（从浏览器工具栏访问）提供：
 
-### 自动检查
-
-当前仓库开发过程中使用以下已验证命令：
-
-```powershell
-corepack pnpm typecheck
-corepack pnpm test
-corepack pnpm build
-```
-
-### 浏览器级验证
-
-这个项目不能只靠 build 成功就算完成。
-
-验证扩展改动时，应该优先做真实浏览器级检查，确认：
-
-- background worker 能正常初始化
-- dashboard 能读取 queue 和 debug state
-- 在支持站点上手动导出仍然可用
-- 文件动作按钮仍然能打到 native-host 或浏览器 fallback
-
-现有浏览器验证辅助脚本位于：
-
-- `apps/extension/scripts/verify-dashboard-file-actions.cjs`
-- `docs/browser-live-testing.md`
-
-它依赖一个兼容的 Chromium 调试会话，以及已经加载好的扩展构建产物。
+- 队列标签页 — 按平台查看 pending、processing、completed、failed 项目
+- 日志标签页 — 实时后台调试日志
+- 设置标签页 — 配置导出目录、发现间隔、平台参数、语言（en/zh-CN）
 
 ## 当前限制
 
-- Google 系站点仍采用保守的 DOM-first 发现，所以历史完整性仍取决于登录态页面在 sweep 期间实际暴露和懒加载出来的内容。
-- Native-host 增强文件动作仅支持 Windows。
-- background 调度与手动验证默认都要求浏览器在线，且用户已经登录目标 AI 站点。
-- 当前还没有独立的归档浏览 Web UI；server 主要负责 ingest 与 query。
+- Google 系平台发现依赖登录态 UI 在 DOM sweep 期间实际暴露的内容
+- Native-host 文件操作仅支持 Windows
+- 后台调度要求浏览器在线且已登录目标 AI 站点
+- 暂无独立的归档浏览 UI，server 侧聚焦于 ingest 与 query
 
-## 下一步路线
+## License
 
-本轮之后的短期优先级：
-
-- 继续拆 `apps/extension/entrypoints/deepseek.content.ts`
-- 继续拆 `apps/extension/src/ui/dashboard/DashboardApp.tsx`
-- 补更完整的 release / contribution 文档
-- 增加一个不依赖个人 Edge profile 的浏览器 smoke flow
-
-历史阶段方案保留在 `docs/PLAN.md`。
-当前重构记录保留在 `docs/refactor-roadmap.md`。
-
-## 发布与归档策略
-
-当前仓库已按“干净初始版本”思路整理：
-
-- 保持 `typecheck`、`test`、`build` 全绿
-- 不把本地临时调试脚本纳入版本控制
-- 用 `v0.1.0` 标记初始基线
-- 优先推送到私有 GitHub 仓库
-
-这样首次历史就围绕“模块化后的扩展 runtime”展开，而不是把一个超大的 background 单文件直接作为初始版本暴露出去。
+Private.

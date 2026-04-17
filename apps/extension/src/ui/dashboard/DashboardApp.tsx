@@ -49,6 +49,8 @@ import { OverviewTab } from "./components/OverviewTab";
 import { QueueTab } from "./components/QueueTab";
 import { SettingsTab } from "./components/SettingsTab";
 import { useDashboardSnapshot, type DashboardMode } from "./useDashboardSnapshot";
+import { useThemeTokens } from "../theme";
+import type { ThemeMode } from "../theme-core";
 
 type DashboardTab = "overview" | "queue" | "logs" | "settings";
 
@@ -64,15 +66,15 @@ const platformLabels: Record<SourcePlatform, string> = {
 const containerStyle: CSSProperties = {
   fontFamily: "ui-sans-serif, system-ui, sans-serif",
   padding: 16,
-  color: "#111827",
+  color: "var(--aiexporter-text-color)",
 };
 
 const cardStyle: CSSProperties = {
-  border: "1px solid #e5e7eb",
+  border: "1px solid var(--aiexporter-border-color)",
   borderRadius: 16,
   padding: 16,
-  background: "#ffffff",
-  boxShadow: "0 10px 30px rgba(15, 23, 42, 0.06)",
+  background: "var(--aiexporter-surface-background)",
+  boxShadow: "var(--aiexporter-shadow)",
 };
 
 function formatTimestamp(value: string | undefined): string {
@@ -107,6 +109,8 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
   const [copiedDetails, setCopiedDetails] = useState(false);
   const [resolvedExportRoot, setResolvedExportRoot] = useState<string | undefined>(undefined);
 
+  const themeMode: ThemeMode = settingsDraft?.uiThemeMode ?? queueState?.settings.uiThemeMode ?? "system";
+  useThemeTokens(themeMode);
   const locale: UiLocale = settingsDraft?.uiLocale ?? queueState?.settings.uiLocale ?? "zh-CN";
   const { t } = useI18n(locale);
   const debugLogs = debugState?.logs ?? [];
@@ -151,6 +155,11 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
   const applyLocale = async (nextLocale: UiLocale) => {
     setGlobalSetting("uiLocale", nextLocale);
     await runAction(() => updateSettings({ uiLocale: nextLocale }));
+  };
+
+  const applyThemeMode = async (nextThemeMode: ThemeMode) => {
+    setGlobalSetting("uiThemeMode", nextThemeMode);
+    await runAction(() => updateSettings({ uiThemeMode: nextThemeMode }));
   };
 
   useEffect(() => {
@@ -261,9 +270,9 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
             style={{
               marginBottom: 12,
               borderRadius: 12,
-              background: "#fef2f2",
-              border: "1px solid #fecaca",
-              color: "#991b1b",
+              background: "var(--aiexporter-danger-background)",
+              border: "1px solid var(--aiexporter-danger-border-color)",
+              color: "var(--aiexporter-danger-text-color)",
               padding: "10px 12px",
               fontSize: 12,
             }}
@@ -316,9 +325,26 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
   };
 
   const popupSummary = (
-    <div style={{ ...containerStyle, minWidth: 520, maxWidth: 620, background: "#f3f4f6" }}>
+    <div
+      style={{
+        ...containerStyle,
+        minWidth: 520,
+        maxWidth: 620,
+        background: "linear-gradient(180deg, var(--aiexporter-page-background) 0%, var(--aiexporter-page-alt-background) 100%)",
+      }}
+    >
       {actionError ? (
-        <div style={{ marginBottom: 12, borderRadius: 12, background: "#fef2f2", border: "1px solid #fecaca", color: "#991b1b", padding: "10px 12px", fontSize: 12 }}>
+        <div
+          style={{
+            marginBottom: 12,
+            borderRadius: 12,
+            background: "var(--aiexporter-danger-background)",
+            border: "1px solid var(--aiexporter-danger-border-color)",
+            color: "var(--aiexporter-danger-text-color)",
+            padding: "10px 12px",
+            fontSize: 12,
+          }}
+        >
           {actionError}
         </div>
       ) : null}
@@ -326,11 +352,11 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
           <div>
             <div style={{ fontSize: 20, fontWeight: 700 }}>{t("popup.title")}</div>
-            <div style={{ color: "#4b5563", marginTop: 6, fontSize: 13 }}>
+            <div style={{ color: "var(--aiexporter-text-muted-color)", marginTop: 6, fontSize: 13 }}>
               {t("popup.subtitle")}
             </div>
           </div>
-          <ActionButton disabled={busy} style={{ background: "#0f766e" }} onClick={() => void openDashboard()}>
+          <ActionButton disabled={busy} style={{ background: "var(--aiexporter-button-accent-background)" }} onClick={() => void openDashboard()}>
             {t("common.openDashboard")}
           </ActionButton>
         </div>
@@ -343,10 +369,10 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
               <div
                 key={platform}
                 style={{
-                  border: "1px solid #e5e7eb",
+                  border: "1px solid var(--aiexporter-border-color)",
                   borderRadius: 14,
                   padding: 12,
-                  background: platform === popupPlatform ? "#eff6ff" : "#f8fafc",
+                  background: platform === popupPlatform ? "var(--aiexporter-info-background)" : "var(--aiexporter-surface-muted-background)",
                   display: "grid",
                   gap: 8,
                 }}
@@ -354,7 +380,7 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
                   <div>
                     <div style={{ fontSize: 15, fontWeight: 700 }}>{label}</div>
-                    <div style={{ color: "#475569", fontSize: 12 }}>
+                    <div style={{ color: "var(--aiexporter-text-muted-color)", fontSize: 12 }}>
                       {t("overview.status")}: {service.status}
                     </div>
                   </div>
@@ -362,8 +388,8 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
                     style={{
                       padding: "4px 8px",
                       borderRadius: 999,
-                      background: service.desiredRunning ? "#dcfce7" : "#e5e7eb",
-                      color: service.desiredRunning ? "#166534" : "#475569",
+                      background: service.desiredRunning ? "var(--aiexporter-success-background)" : "var(--aiexporter-chip-background)",
+                      color: service.desiredRunning ? "var(--aiexporter-success-text-color)" : "var(--aiexporter-chip-text-color)",
                       fontSize: 11,
                       fontWeight: 700,
                     }}
@@ -379,14 +405,22 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
                     [t("overview.failed"), service.stats.failed],
                     [t("overview.discovered"), service.stats.discoveredTotal],
                   ].map(([metricLabel, metricValue]) => (
-                    <div key={metricLabel} style={{ borderRadius: 10, background: "#ffffff", padding: 8, border: "1px solid #e5e7eb" }}>
-                      <div style={{ color: "#6b7280", fontSize: 11 }}>{metricLabel}</div>
+                    <div
+                      key={metricLabel}
+                      style={{
+                        borderRadius: 10,
+                        background: "var(--aiexporter-surface-background)",
+                        padding: 8,
+                        border: "1px solid var(--aiexporter-border-color)",
+                      }}
+                    >
+                      <div style={{ color: "var(--aiexporter-text-soft-color)", fontSize: 11 }}>{metricLabel}</div>
                       <div style={{ fontSize: 18, fontWeight: 700, marginTop: 4 }}>{metricValue}</div>
                     </div>
                   ))}
                 </div>
 
-                <div style={{ display: "grid", gap: 4, fontSize: 11, color: "#475569" }}>
+                <div style={{ display: "grid", gap: 4, fontSize: 11, color: "var(--aiexporter-text-muted-color)" }}>
                   <div>{t("overview.lastDiscovery")}: {formatTimestamp(service.lastDiscoveryAt)}</div>
                   <div>{t("overview.lastExport")}: {formatTimestamp(service.lastExportAt)}</div>
                 </div>
@@ -399,18 +433,10 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
                   >
                     {t("common.resume")}
                   </ActionButton>
-                  <ActionButton
-                    disabled={busy}
-                    style={{ background: "#7c2d12", padding: "6px 10px", fontSize: 12 }}
-                    onClick={() => void runAction(() => pausePlatform(platform))}
-                  >
+                  <ActionButton disabled={busy} style={{ background: "var(--aiexporter-button-danger-background)", padding: "6px 10px", fontSize: 12 }} onClick={() => void runAction(() => pausePlatform(platform))}>
                     {t("common.pause")}
                   </ActionButton>
-                  <ActionButton
-                    disabled={busy}
-                    style={{ background: "#0f766e", padding: "6px 10px", fontSize: 12 }}
-                    onClick={() => void runAction(() => runDiscovery(platform))}
-                  >
+                  <ActionButton disabled={busy} style={{ background: "var(--aiexporter-button-accent-background)", padding: "6px 10px", fontSize: 12 }} onClick={() => void runAction(() => runDiscovery(platform))}>
                     {t("common.runDiscovery")}
                   </ActionButton>
                 </div>
@@ -420,10 +446,10 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
         </div>
 
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 16 }}>
-          <ActionButton disabled={busy} style={{ background: "#1d4ed8" }} onClick={() => void runAction(() => processQueue())}>
+          <ActionButton disabled={busy} style={{ background: "var(--aiexporter-button-primary-background)" }} onClick={() => void runAction(() => processQueue())}>
             {t("common.processQueue")}
           </ActionButton>
-          <ActionButton disabled={busy} style={{ background: "#475569" }} onClick={() => void refresh()}>
+          <ActionButton disabled={busy} style={{ background: "var(--aiexporter-button-secondary-background)" }} onClick={() => void refresh()}>
             {t("common.refresh")}
           </ActionButton>
         </div>
@@ -441,7 +467,7 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
     <div style={{ ...containerStyle, minWidth: 980 }}>
       <div style={{ display: "grid", gap: 16 }}>
         {actionError ? (
-          <div style={{ borderRadius: 12, background: "#fef2f2", border: "1px solid #fecaca", color: "#991b1b", padding: "10px 12px", fontSize: 12 }}>
+          <div style={{ borderRadius: 12, background: "var(--aiexporter-danger-background)", border: "1px solid var(--aiexporter-danger-border-color)", color: "var(--aiexporter-danger-text-color)", padding: "10px 12px", fontSize: 12 }}>
             {actionError}
           </div>
         ) : null}
@@ -449,16 +475,25 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
             <div>
               <div style={{ fontSize: 26, fontWeight: 700 }}>{t("dashboard.title")}</div>
-              <div style={{ color: "#4b5563", marginTop: 6 }}>{t("dashboard.subtitle")}</div>
+              <div style={{ color: "var(--aiexporter-text-muted-color)", marginTop: 6 }}>{t("dashboard.subtitle")}</div>
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <ActionButton disabled={busy} style={{ background: locale === "zh-CN" ? "#111827" : "#475569" }} onClick={() => void applyLocale("zh-CN")}>
+              <ActionButton disabled={busy} style={{ background: locale === "zh-CN" ? "var(--aiexporter-button-primary-background)" : "var(--aiexporter-button-secondary-background)" }} onClick={() => void applyLocale("zh-CN")}>
                 {t("common.languageChinese")}
               </ActionButton>
-              <ActionButton disabled={busy} style={{ background: locale === "en" ? "#111827" : "#475569" }} onClick={() => void applyLocale("en")}>
+              <ActionButton disabled={busy} style={{ background: locale === "en" ? "var(--aiexporter-button-primary-background)" : "var(--aiexporter-button-secondary-background)" }} onClick={() => void applyLocale("en")}>
                 {t("common.languageEnglish")}
               </ActionButton>
-              <ActionButton disabled={busy} style={{ background: "#0f766e" }} onClick={() => void refresh()}>
+              <ActionButton disabled={busy} style={{ background: themeMode === "system" ? "var(--aiexporter-button-primary-background)" : "var(--aiexporter-button-secondary-background)" }} onClick={() => void applyThemeMode("system")}>
+                {t("common.themeSystem")}
+              </ActionButton>
+              <ActionButton disabled={busy} style={{ background: themeMode === "light" ? "var(--aiexporter-button-primary-background)" : "var(--aiexporter-button-secondary-background)" }} onClick={() => void applyThemeMode("light")}>
+                {t("common.themeLight")}
+              </ActionButton>
+              <ActionButton disabled={busy} style={{ background: themeMode === "dark" ? "var(--aiexporter-button-primary-background)" : "var(--aiexporter-button-secondary-background)" }} onClick={() => void applyThemeMode("dark")}>
+                {t("common.themeDark")}
+              </ActionButton>
+              <ActionButton disabled={busy} style={{ background: "var(--aiexporter-button-accent-background)" }} onClick={() => void refresh()}>
                 {t("common.refresh")}
               </ActionButton>
             </div>
@@ -468,7 +503,7 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
             {dashboardPlatforms.map((platform) => (
               <ActionButton
                 key={platform}
-                style={{ background: selectedPlatform === platform ? "#0f172a" : "#64748b" }}
+                style={{ background: selectedPlatform === platform ? "var(--aiexporter-button-primary-background)" : "var(--aiexporter-button-secondary-background)" }}
                 onClick={() => setSelectedPlatform(platform)}
               >
                 {platformLabels[platform]}
@@ -480,7 +515,7 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
             {tabs.map((nextTab) => (
               <ActionButton
                 key={nextTab}
-                style={{ background: tab === nextTab ? "#111827" : "#475569" }}
+                style={{ background: tab === nextTab ? "var(--aiexporter-button-primary-background)" : "var(--aiexporter-button-secondary-background)" }}
                 onClick={() => setTab(nextTab)}
               >
                 {t(`tabs.${nextTab}` as const)}
@@ -611,6 +646,7 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
           <SettingsTab
             busy={busy}
             locale={locale}
+            themeMode={themeMode}
             platformKey={selectedPlatform}
             platformLabel={selectedPlatformLabel}
             platformDraft={settingsDraft.platforms[selectedPlatform]}
@@ -618,6 +654,7 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
             resolvedExportRoot={resolvedExportRoot}
             t={t}
             onLocaleChange={(nextLocale) => void applyLocale(nextLocale)}
+            onThemeModeChange={(nextThemeMode) => void applyThemeMode(nextThemeMode)}
             onGlobalSettingChange={setGlobalSetting}
             onSchedulerChange={setSchedulerSetting}
             onDownloadsChange={setDownloadsSetting}
@@ -654,7 +691,7 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
           />
         ) : null}
 
-        <div style={{ color: "#64748b", fontSize: 12 }}>
+          <div style={{ color: "var(--aiexporter-text-muted-color)", fontSize: 12 }}>
           {selectedPlatformLabel} · {t("overview.lastDiscovery")}: {formatTimestamp(selectedService.lastDiscoveryAt)} · {t("overview.lastExport")}:{" "}
           {formatTimestamp(selectedService.lastExportAt)}
         </div>

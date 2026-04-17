@@ -33,27 +33,29 @@ interface LogsTabProps {
 }
 
 const cardStyle: CSSProperties = {
-  border: "1px solid #e5e7eb",
+  border: "1px solid var(--aiexporter-border-color)",
   borderRadius: 16,
   padding: 16,
-  background: "#ffffff",
-  boxShadow: "0 10px 30px rgba(15, 23, 42, 0.06)",
+  background: "var(--aiexporter-surface-background)",
+  boxShadow: "var(--aiexporter-shadow)",
 };
 
 const inputStyle: CSSProperties = {
   borderRadius: 10,
-  border: "1px solid #d1d5db",
+  border: "1px solid var(--aiexporter-input-border-color)",
   padding: "8px 10px",
   fontSize: 13,
   width: "100%",
   boxSizing: "border-box",
+  background: "var(--aiexporter-input-background)",
+  color: "var(--aiexporter-input-text-color)",
 };
 
 function getLevelColor(level: DebugLogLevel): string {
-  if (level === "error") return "#991b1b";
-  if (level === "warn") return "#9a3412";
-  if (level === "info") return "#1d4ed8";
-  return "#4b5563";
+  if (level === "error") return "var(--aiexporter-danger-text-color)";
+  if (level === "warn") return "var(--aiexporter-warning-text-color)";
+  if (level === "info") return "var(--aiexporter-info-text-color)";
+  return "var(--aiexporter-text-muted-color)";
 }
 
 function formatTimestamp(value: string): string {
@@ -107,13 +109,13 @@ export function LogsTab({
               {level}
             </label>
           ))}
-          <ActionButton disabled={busy} style={{ background: "#0f766e" }} onClick={onRefresh}>
+          <ActionButton disabled={busy} style={{ background: "var(--aiexporter-button-accent-background)" }} onClick={onRefresh}>
             {t("common.refresh")}
           </ActionButton>
-          <ActionButton disabled={busy} style={{ background: "#1d4ed8" }} onClick={onExportLogs}>
+          <ActionButton disabled={busy} style={{ background: "var(--aiexporter-button-primary-background)" }} onClick={onExportLogs}>
             {t("logs.export")}
           </ActionButton>
-          <ActionButton disabled={busy} style={{ background: "#7c2d12" }} onClick={onClearLogs}>
+          <ActionButton disabled={busy} style={{ background: "var(--aiexporter-button-danger-background)" }} onClick={onClearLogs}>
             {t("logs.clear")}
           </ActionButton>
         </div>
@@ -126,8 +128,8 @@ export function LogsTab({
             ...inputStyle,
             display: "flex",
             alignItems: "center",
-            background: "#f8fafc",
-            color: "#334155",
+            background: "var(--aiexporter-input-muted-background)",
+            color: "var(--aiexporter-text-muted-color)",
             fontWeight: 600,
           }}
         >
@@ -152,7 +154,7 @@ export function LogsTab({
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.4fr) minmax(320px, 0.6fr)", gap: 12 }}>
         <div style={{ display: "grid", gap: 4, maxHeight: 520, overflowY: "auto" }}>
           {logs.length === 0 ? (
-            <div style={{ color: "#6b7280" }}>{t("logs.empty")}</div>
+            <div style={{ color: "var(--aiexporter-text-muted-color)" }}>{t("logs.empty")}</div>
           ) : (
             logs.map((entry) => (
               <div
@@ -171,15 +173,20 @@ export function LogsTab({
                   alignItems: "center",
                   padding: "6px 8px",
                   borderRadius: 10,
-                  background: selectedLogId === entry.id ? "#cbd5e1" : hoveredLogId === entry.id ? "#e2e8f0" : "#f8fafc",
+                  background:
+                    selectedLogId === entry.id
+                      ? "var(--aiexporter-highlight-background)"
+                      : hoveredLogId === entry.id
+                        ? "var(--aiexporter-surface-raised-background)"
+                        : "var(--aiexporter-surface-muted-background)",
                   fontSize: 12,
                   cursor: "pointer",
                 }}
               >
-                <span style={{ color: "#6b7280" }}>{new Date(entry.timestamp).toLocaleTimeString()}</span>
+                <span style={{ color: "var(--aiexporter-text-soft-color)" }}>{new Date(entry.timestamp).toLocaleTimeString()}</span>
                 <span style={{ color: getLevelColor(entry.level), fontWeight: 700, textTransform: "uppercase" }}>{entry.level}</span>
-                <span style={{ color: "#4b5563", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{entry.scope}</span>
-                <span style={{ color: "#475569", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{entry.code ?? "-"}</span>
+                <span style={{ color: "var(--aiexporter-text-muted-color)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{entry.scope}</span>
+                <span style={{ color: "var(--aiexporter-text-muted-color)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{entry.code ?? "-"}</span>
                 <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{entry.message}</span>
               </div>
             ))
@@ -188,10 +195,10 @@ export function LogsTab({
 
         <div
           style={{
-            border: "1px solid #e5e7eb",
+            border: "1px solid var(--aiexporter-log-panel-border-color)",
             borderRadius: 12,
-            background: "#0f172a",
-            color: "#e2e8f0",
+            background: "var(--aiexporter-log-panel-background)",
+            color: "var(--aiexporter-log-panel-text-color)",
             padding: 12,
             minHeight: 220,
             maxHeight: 520,
@@ -201,23 +208,23 @@ export function LogsTab({
           <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", marginBottom: 8 }}>
             <div style={{ fontSize: 12, fontWeight: 700 }}>{t("logs.detailsTitle")}</div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <ActionButton disabled={!detailLogEntry} style={{ background: "#2563eb", padding: "6px 10px", fontSize: 12 }} onClick={onCopyDetails}>
+              <ActionButton disabled={!detailLogEntry} style={{ background: "var(--aiexporter-button-primary-background)", padding: "6px 10px", fontSize: 12 }} onClick={onCopyDetails}>
                 {copiedDetails ? t("common.copied") : t("common.copyJson")}
               </ActionButton>
-              <ActionButton disabled={!detailLogEntry} style={{ background: "#0f766e", padding: "6px 10px", fontSize: 12 }} onClick={onCopyEntry}>
+              <ActionButton disabled={!detailLogEntry} style={{ background: "var(--aiexporter-button-accent-background)", padding: "6px 10px", fontSize: 12 }} onClick={onCopyEntry}>
                 {t("logs.copyEntry")}
               </ActionButton>
-              <ActionButton disabled={!selectedLogId} style={{ background: "#475569", padding: "6px 10px", fontSize: 12 }} onClick={() => onSelectLog(null)}>
+              <ActionButton disabled={!selectedLogId} style={{ background: "var(--aiexporter-button-secondary-background)", padding: "6px 10px", fontSize: 12 }} onClick={() => onSelectLog(null)}>
                 {t("logs.clearSelection")}
               </ActionButton>
             </div>
           </div>
           {detailLogEntry ? (
             <div style={{ display: "grid", gap: 8 }}>
-              <div style={{ fontSize: 12, color: "#94a3b8" }}>
+              <div style={{ fontSize: 12, color: "var(--aiexporter-log-panel-muted-text-color)" }}>
                 {formatTimestamp(detailLogEntry.timestamp)} · {detailLogEntry.scope} · {detailLogEntry.code ?? "-"}
               </div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", fontSize: 11, color: "#cbd5e1" }}>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", fontSize: 11, color: "var(--aiexporter-log-panel-muted-text-color)" }}>
                 {detailLogEntry.sourceId ? <span>sourceId: {detailLogEntry.sourceId}</span> : null}
                 {detailLogEntry.traceId ? <span>traceId: {detailLogEntry.traceId}</span> : null}
                 {detailLogEntry.workerId ? <span>workerId: {detailLogEntry.workerId}</span> : null}
@@ -225,14 +232,14 @@ export function LogsTab({
               <div style={{ fontSize: 13, fontWeight: 600 }}>{detailLogEntry.message}</div>
               {relatedLogs.length > 1 ? (
                 <div style={{ display: "grid", gap: 6 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#cbd5e1" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--aiexporter-log-panel-text-color)" }}>
                     Related Timeline ({relatedLogs.length})
                   </div>
                   <div
                     style={{
                       display: "grid",
                       gap: 6,
-                      border: "1px solid rgba(148, 163, 184, 0.35)",
+                      border: "1px solid var(--aiexporter-log-panel-border-color)",
                       borderRadius: 10,
                       padding: 8,
                       background: "rgba(15, 23, 42, 0.35)",
@@ -246,7 +253,7 @@ export function LogsTab({
                           gridTemplateColumns: "76px 48px 1fr",
                           gap: 8,
                           fontSize: 11,
-                          color: entry.id === detailLogEntry.id ? "#f8fafc" : "#cbd5e1",
+                          color: entry.id === detailLogEntry.id ? "var(--aiexporter-log-panel-text-color)" : "var(--aiexporter-log-panel-muted-text-color)",
                           opacity: entry.id === detailLogEntry.id ? 1 : 0.9,
                         }}
                       >
@@ -275,7 +282,7 @@ export function LogsTab({
               </pre>
             </div>
           ) : (
-            <div style={{ color: "#94a3b8", fontSize: 12 }}>{t("logs.detailsHint")}</div>
+            <div style={{ color: "var(--aiexporter-log-panel-muted-text-color)", fontSize: 12 }}>{t("logs.detailsHint")}</div>
           )}
         </div>
       </div>

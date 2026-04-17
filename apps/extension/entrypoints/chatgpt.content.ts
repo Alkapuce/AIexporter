@@ -2,6 +2,7 @@ import { buildDiscoveryFingerprint, type MainWorldBridgeMessage, type RuntimeMes
 import { chatgptAdapter, extractConversationIdFromUrl, parseChatGptConversationResponse } from "@aiexporter/adapters-chatgpt";
 import { normalizeConversationUrl } from "@aiexporter/core-schema";
 import { createRuntimeLogger } from "../src/runtime/logger";
+import { startThemeSync } from "../src/ui/theme-runtime";
 
 const BUTTON_ID = "aiexporter-floating-export";
 const STATUS_ID = "aiexporter-floating-status";
@@ -31,8 +32,8 @@ function ensureFloatingButton(): HTMLButtonElement {
     "border-radius:999px",
     "padding:12px 16px",
     "font:600 14px/1.2 system-ui",
-    "background:#111827",
-    "color:#fff",
+    "background:var(--aiexporter-button-primary-background)",
+    "color:var(--aiexporter-button-primary-text)",
     "cursor:pointer",
     "box-shadow:0 12px 28px rgba(0,0,0,0.18)",
   ].join(";");
@@ -42,8 +43,8 @@ function ensureFloatingButton(): HTMLButtonElement {
   status.style.cssText = [
     "padding:6px 10px",
     "border-radius:999px",
-    "background:rgba(17,24,39,0.85)",
-    "color:#fff",
+    "background:var(--aiexporter-button-secondary-background)",
+    "color:var(--aiexporter-button-secondary-text)",
     "font:500 12px/1.2 system-ui",
     "display:none",
   ].join(";");
@@ -59,7 +60,17 @@ function setStatus(text: string, tone: "neutral" | "success" | "error" = "neutra
   status.textContent = text;
   status.style.display = "block";
   status.style.background =
-    tone === "success" ? "rgba(22, 101, 52, 0.9)" : tone === "error" ? "rgba(127, 29, 29, 0.92)" : "rgba(17,24,39,0.85)";
+    tone === "success"
+      ? "var(--aiexporter-success-background)"
+      : tone === "error"
+        ? "var(--aiexporter-danger-background)"
+        : "var(--aiexporter-button-secondary-background)";
+  status.style.color =
+    tone === "success"
+      ? "var(--aiexporter-success-text-color)"
+      : tone === "error"
+        ? "var(--aiexporter-danger-text-color)"
+        : "var(--aiexporter-button-secondary-text)";
   window.setTimeout(() => {
     status.style.display = "none";
   }, 2500);
@@ -219,6 +230,7 @@ async function fetchChatGptConversationViaPageWorld(sourceId: string) {
 export default defineContentScript({
   matches: ["https://chatgpt.com/*"],
   async main() {
+    startThemeSync(document, { styleBody: false });
     const log = createRuntimeLogger("content.chatgpt");
     await log("info", "ChatGPT content script initialized.", {
       url: window.location.href,

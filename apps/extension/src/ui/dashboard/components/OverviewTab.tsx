@@ -16,11 +16,11 @@ interface OverviewTabProps {
 }
 
 const cardStyle: CSSProperties = {
-  border: "1px solid #e5e7eb",
+  border: "1px solid var(--aiexporter-border-color)",
   borderRadius: 16,
   padding: 16,
-  background: "#ffffff",
-  boxShadow: "0 10px 30px rgba(15, 23, 42, 0.06)",
+  background: "var(--aiexporter-surface-background)",
+  boxShadow: "var(--aiexporter-shadow)",
 };
 
 function formatTimestamp(value: string | undefined): string {
@@ -53,7 +53,7 @@ export function OverviewTab({
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
         <div>
           <div style={{ fontSize: 22, fontWeight: 700 }}>{platformLabel} {t("overview.serviceTitle")}</div>
-          <div style={{ marginTop: 8, color: "#4b5563", fontSize: 14 }}>
+          <div style={{ marginTop: 8, color: "var(--aiexporter-text-muted-color)", fontSize: 14 }}>
             {t("overview.status")}: {service.status}
           </div>
         </div>
@@ -61,16 +61,16 @@ export function OverviewTab({
           <ActionButton disabled={busy} onClick={onResume}>
             {t("common.resume")}
           </ActionButton>
-          <ActionButton disabled={busy} style={{ background: "#7c2d12" }} onClick={onPause}>
+          <ActionButton disabled={busy} style={{ background: "var(--aiexporter-button-danger-background)" }} onClick={onPause}>
             {t("common.pause")}
           </ActionButton>
-          <ActionButton disabled={busy} style={{ background: "#0f766e" }} onClick={onRunDiscovery}>
+          <ActionButton disabled={busy} style={{ background: "var(--aiexporter-button-accent-background)" }} onClick={onRunDiscovery}>
             {t("common.runDiscovery")}
           </ActionButton>
-          <ActionButton disabled={busy} style={{ background: "#334155" }} onClick={onRunFullDiscovery}>
+          <ActionButton disabled={busy} style={{ background: "var(--aiexporter-button-secondary-background)" }} onClick={onRunFullDiscovery}>
             {t("common.runFullDiscovery")}
           </ActionButton>
-          <ActionButton disabled={busy} style={{ background: "#1d4ed8" }} onClick={onProcessQueue}>
+          <ActionButton disabled={busy} style={{ background: "var(--aiexporter-button-primary-background)" }} onClick={onProcessQueue}>
             {t("common.processQueue")}
           </ActionButton>
         </div>
@@ -78,14 +78,14 @@ export function OverviewTab({
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 12, marginTop: 18 }}>
         {metrics.map(([label, value]) => (
-          <div key={label} style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 12, background: "#f9fafb" }}>
-            <div style={{ color: "#6b7280", fontSize: 12 }}>{label}</div>
-            <div style={{ fontSize: 24, fontWeight: 700, marginTop: 6 }}>{value}</div>
-          </div>
-        ))}
+        <div key={label} style={{ border: "1px solid var(--aiexporter-border-color)", borderRadius: 12, padding: 12, background: "var(--aiexporter-surface-muted-background)" }}>
+          <div style={{ color: "var(--aiexporter-text-soft-color)", fontSize: 12 }}>{label}</div>
+          <div style={{ fontSize: 24, fontWeight: 700, marginTop: 6 }}>{value}</div>
+        </div>
+      ))}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12, marginTop: 18, fontSize: 13 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12, marginTop: 18, fontSize: 13, color: "var(--aiexporter-text-muted-color)" }}>
         <div>{t("overview.lastDiscovery")}: {formatTimestamp(service.lastDiscoveryAt)}</div>
         <div>{t("overview.lastExport")}: {formatTimestamp(service.lastExportAt)}</div>
         <div>{t("overview.nextRun")}: {formatTimestamp(service.nextPlannedRunAt)}</div>

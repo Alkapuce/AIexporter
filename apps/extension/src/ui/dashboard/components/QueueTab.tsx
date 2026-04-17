@@ -43,20 +43,22 @@ interface QueueTabProps {
 }
 
 const cardStyle: CSSProperties = {
-  border: "1px solid #e5e7eb",
+  border: "1px solid var(--aiexporter-border-color)",
   borderRadius: 16,
   padding: 16,
-  background: "#ffffff",
-  boxShadow: "0 10px 30px rgba(15, 23, 42, 0.06)",
+  background: "var(--aiexporter-surface-background)",
+  boxShadow: "var(--aiexporter-shadow)",
 };
 
 const inputStyle: CSSProperties = {
   borderRadius: 10,
-  border: "1px solid #d1d5db",
+  border: "1px solid var(--aiexporter-input-border-color)",
   padding: "8px 10px",
   fontSize: 13,
   width: "100%",
   boxSizing: "border-box",
+  background: "var(--aiexporter-input-background)",
+  color: "var(--aiexporter-input-text-color)",
 };
 
 function formatTimestamp(value: string | undefined): string {
@@ -125,15 +127,15 @@ export function QueueTab({
           </ActionButton>
           <ActionButton
             disabled={busy || missingLocalCount === 0}
-            style={{ background: "#1d4ed8" }}
+            style={{ background: "var(--aiexporter-button-primary-background)" }}
             onClick={onReExportMissingLocal}
           >
             {t("queue.reExportMissingLocal")} ({missingLocalCount})
           </ActionButton>
-          <ActionButton disabled={busy} style={{ background: "#374151" }} onClick={onClearCompleted}>
+          <ActionButton disabled={busy} style={{ background: "var(--aiexporter-button-secondary-background)" }} onClick={onClearCompleted}>
             {t("queue.clearCompleted")}
           </ActionButton>
-          <ActionButton disabled={busy} style={{ background: "#7c2d12" }} onClick={onClearFailed}>
+          <ActionButton disabled={busy} style={{ background: "var(--aiexporter-button-danger-background)" }} onClick={onClearFailed}>
             {t("queue.clearFailed")}
           </ActionButton>
         </div>
@@ -166,7 +168,7 @@ export function QueueTab({
           <option value="desc">{t("queue.sort.desc")}</option>
           <option value="asc">{t("queue.sort.asc")}</option>
         </select>
-        <ActionButton disabled={busy} style={{ background: "#0f766e" }} onClick={onPausePlatform}>
+        <ActionButton disabled={busy} style={{ background: "var(--aiexporter-button-accent-background)" }} onClick={onPausePlatform}>
           {t("queue.pausePlatform")}
         </ActionButton>
         <ActionButton disabled={busy} onClick={onResumePlatform}>
@@ -175,11 +177,11 @@ export function QueueTab({
       </div>
 
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
-        <div style={{ color: "#475569", fontSize: 12 }}>
+        <div style={{ color: "var(--aiexporter-text-muted-color)", fontSize: 12 }}>
           {t("queue.pagination.summary")}: {pageStart}-{pageEnd} / {totalItems}
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          <label style={{ display: "flex", gap: 6, alignItems: "center", color: "#475569", fontSize: 12 }}>
+          <label style={{ display: "flex", gap: 6, alignItems: "center", color: "var(--aiexporter-text-muted-color)", fontSize: 12 }}>
             <span>{t("queue.pagination.pageSize")}</span>
             <select style={{ ...inputStyle, width: 96 }} value={String(pageSize)} onChange={(event) => onPageSizeChange(Number(event.target.value))}>
               {[50, 100, 200].map((size) => (
@@ -189,13 +191,13 @@ export function QueueTab({
               ))}
             </select>
           </label>
-          <ActionButton disabled={busy || page <= 1} style={{ background: "#475569" }} onClick={() => onPageChange(page - 1)}>
+          <ActionButton disabled={busy || page <= 1} style={{ background: "var(--aiexporter-button-secondary-background)" }} onClick={() => onPageChange(page - 1)}>
             {t("queue.pagination.prev")}
           </ActionButton>
-          <div style={{ color: "#111827", fontSize: 12, fontWeight: 600 }}>
+          <div style={{ color: "var(--aiexporter-text-color)", fontSize: 12, fontWeight: 600 }}>
             {t("queue.pagination.page")}: {page} / {Math.max(1, totalPages)}
           </div>
-          <ActionButton disabled={busy || page >= totalPages} style={{ background: "#475569" }} onClick={() => onPageChange(page + 1)}>
+          <ActionButton disabled={busy || page >= totalPages} style={{ background: "var(--aiexporter-button-secondary-background)" }} onClick={() => onPageChange(page + 1)}>
             {t("queue.pagination.next")}
           </ActionButton>
         </div>
@@ -203,7 +205,7 @@ export function QueueTab({
 
       <div style={{ display: "grid", gap: 8 }}>
         {items.length === 0 ? (
-          <div style={{ color: "#6b7280" }}>{t("queue.empty")}</div>
+          <div style={{ color: "var(--aiexporter-text-muted-color)" }}>{t("queue.empty")}</div>
         ) : (
           items.map((item) => {
             const conversationEntry = conversationIndexMap.get(item.event.sourceId);
@@ -217,23 +219,23 @@ export function QueueTab({
                   gridTemplateColumns: "minmax(260px, 2.2fr) 0.9fr 0.9fr 0.8fr 1fr auto",
                   gap: 10,
                   alignItems: "start",
-                  borderBottom: "1px solid #f1f5f9",
+                  borderBottom: "1px solid var(--aiexporter-border-color)",
                   padding: "10px 0",
                 }}
               >
                 <div style={{ display: "grid", gap: 4 }}>
                   <div style={{ fontWeight: 600, fontSize: 13 }}>{item.event.title ?? t("queue.titleFallback")}</div>
-                  <div style={{ color: "#6b7280", fontSize: 11 }}>{item.event.sourceId}</div>
-                  <div style={{ color: "#475569", fontSize: 11 }}>{t("queue.websiteTime")}: {formatWebsiteTime(conversationEntry)}</div>
-                  <div style={{ color: "#475569", fontSize: 11 }}>{t("queue.lastSeenAt")}: {formatTimestamp(conversationEntry?.lastSeenAt)}</div>
-                  <div style={{ color: "#475569", fontSize: 11 }}>{t("queue.lastExportAt")}: {formatTimestamp(latestArtifact?.exportedAt)}</div>
-                  <div style={{ color: "#475569", fontSize: 11 }}>{t("queue.discoveredAt")}: {formatTimestamp(item.discoveredAt)}</div>
-                  {item.resultRevision ? <div style={{ color: "#475569", fontSize: 11 }}>{t("queue.resultRevision")}: {item.resultRevision.slice(0, 12)}</div> : null}
+                  <div style={{ color: "var(--aiexporter-text-soft-color)", fontSize: 11 }}>{item.event.sourceId}</div>
+                  <div style={{ color: "var(--aiexporter-text-muted-color)", fontSize: 11 }}>{t("queue.websiteTime")}: {formatWebsiteTime(conversationEntry)}</div>
+                  <div style={{ color: "var(--aiexporter-text-muted-color)", fontSize: 11 }}>{t("queue.lastSeenAt")}: {formatTimestamp(conversationEntry?.lastSeenAt)}</div>
+                  <div style={{ color: "var(--aiexporter-text-muted-color)", fontSize: 11 }}>{t("queue.lastExportAt")}: {formatTimestamp(latestArtifact?.exportedAt)}</div>
+                  <div style={{ color: "var(--aiexporter-text-muted-color)", fontSize: 11 }}>{t("queue.discoveredAt")}: {formatTimestamp(item.discoveredAt)}</div>
+                  {item.resultRevision ? <div style={{ color: "var(--aiexporter-text-muted-color)", fontSize: 11 }}>{t("queue.resultRevision")}: {item.resultRevision.slice(0, 12)}</div> : null}
                   {item.skipReason === "latest_exists" ? (
-                    <div style={{ color: "#0f766e", fontSize: 11 }}>{t("queue.skipReason.latest_exists")}</div>
+                    <div style={{ color: "var(--aiexporter-button-accent-background)", fontSize: 11 }}>{t("queue.skipReason.latest_exists")}</div>
                   ) : null}
-                  {item.errorCode ? <div style={{ color: "#991b1b", fontSize: 11 }}>{t("queue.errorCode")}: {item.errorCode}</div> : null}
-                  {item.lastError ? <div style={{ color: "#991b1b", fontSize: 11 }}>{item.lastError}</div> : null}
+                  {item.errorCode ? <div style={{ color: "var(--aiexporter-danger-text-color)", fontSize: 11 }}>{t("queue.errorCode")}: {item.errorCode}</div> : null}
+                  {item.lastError ? <div style={{ color: "var(--aiexporter-danger-text-color)", fontSize: 11 }}>{item.lastError}</div> : null}
                 </div>
                 <div style={{ display: "grid", gap: 4, fontSize: 12 }}>
                   <div>{t("queue.priority")}: {item.priority}</div>
@@ -246,19 +248,19 @@ export function QueueTab({
                 <div style={{ fontSize: 12 }}>{conversationEntry?.latestSourceUpdatedLabel ?? t("common.notAvailable")}</div>
                 <div style={{ fontSize: 12 }}>{formatTimestamp(latestArtifact?.exportedAt)}</div>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                  <ActionButton style={{ background: "#2563eb" }} disabled={busy} onClick={() => onOpenSource(item.event.url)}>
+                  <ActionButton style={{ background: "var(--aiexporter-button-primary-background)" }} disabled={busy} onClick={() => onOpenSource(item.event.url)}>
                     {t("common.openSource")}
                   </ActionButton>
                   {canOpenArtifacts ? (
                     <>
                       <ActionButton
-                        style={{ background: "#0f766e" }}
+                        style={{ background: "var(--aiexporter-button-accent-background)" }}
                         onClick={() => onOpenLatest(item.event.sourceId)}
                       >
                         {t("common.openLatestMarkdown")}
                       </ActionButton>
                       <ActionButton
-                        style={{ background: "#475569" }}
+                        style={{ background: "var(--aiexporter-button-secondary-background)" }}
                         onClick={() => onShowFolder(item.event.sourceId)}
                       >
                         {t("common.showExportFolder")}
@@ -269,39 +271,39 @@ export function QueueTab({
                       style={{
                         padding: "8px 12px",
                         borderRadius: 999,
-                        background: "#e5e7eb",
-                        color: "#6b7280",
-                        fontSize: 12,
-                        fontWeight: 600,
-                      }}
+                      background: "var(--aiexporter-chip-background)",
+                      color: "var(--aiexporter-chip-text-color)",
+                      fontSize: 12,
+                      fontWeight: 600,
+                    }}
                     >
                       {t("queue.noLocalFile")}
                     </div>
                   )}
                   <ActionButton
                     disabled={busy || item.status === "processing"}
-                    style={{ background: "#1d4ed8" }}
+                    style={{ background: "var(--aiexporter-button-primary-background)" }}
                     onClick={() => onForceExport(item.key)}
                   >
                     {t("common.reExport")}
                   </ActionButton>
                   <ActionButton
                     disabled={busy || item.status !== "failed"}
-                    style={{ background: "#0f766e" }}
+                    style={{ background: "var(--aiexporter-button-accent-background)" }}
                     onClick={() => onRetryItem(item.key)}
                   >
                     {t("common.retry")}
                   </ActionButton>
                   <ActionButton
                     disabled={busy || item.status === "processing"}
-                    style={{ background: "#7c2d12" }}
+                    style={{ background: "var(--aiexporter-button-danger-background)" }}
                     onClick={() => onCancelItem(item.key)}
                   >
                     {t("common.cancel")}
                   </ActionButton>
                   <ActionButton
                     disabled={busy || item.status === "processing"}
-                    style={{ background: "#374151" }}
+                    style={{ background: "var(--aiexporter-button-secondary-background)" }}
                     onClick={() => onRemoveItem(item.key)}
                   >
                     {t("common.remove")}

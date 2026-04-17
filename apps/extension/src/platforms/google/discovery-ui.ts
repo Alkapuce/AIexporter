@@ -1,4 +1,9 @@
 import type { SourcePlatform } from "@aiexporter/core-schema";
+import { startThemeSync } from "../../ui/theme-runtime";
+
+if (typeof document !== "undefined") {
+  startThemeSync(document, { styleBody: false });
+}
 
 interface DiscoveryUiOptions {
   onLogEntry?: (message: string) => void | Promise<void>;
@@ -44,8 +49,8 @@ export function createDiscoveryUiController(
     "gap:8px",
     "padding:12px",
     "border-radius:12px",
-    "background:rgba(17,24,39,0.94)",
-    "color:#fff",
+    "background:var(--aiexporter-log-panel-background)",
+    "color:var(--aiexporter-log-panel-text-color)",
     "font:12px/1.4 system-ui, sans-serif",
     "box-shadow:0 12px 32px rgba(0,0,0,0.35)",
     "backdrop-filter:blur(8px)",
@@ -57,17 +62,17 @@ export function createDiscoveryUiController(
 
   const status = document.createElement("div");
   status.textContent = "准备中";
-  status.style.cssText = "color:#cbd5e1;";
+  status.style.cssText = "color:var(--aiexporter-log-panel-muted-text-color);";
 
   const metrics = document.createElement("pre");
   metrics.style.cssText = [
     "margin:0",
     "padding:8px",
     "border-radius:8px",
-    "background:rgba(15,23,42,0.75)",
+    "background:var(--aiexporter-surface-raised-background)",
     "white-space:pre-wrap",
     "word-break:break-word",
-    "color:#bfdbfe",
+    "color:var(--aiexporter-info-text-color)",
     "min-height:56px",
   ].join(";");
 
@@ -92,8 +97,8 @@ export function createDiscoveryUiController(
       "border:none",
       "border-radius:999px",
       "padding:6px 10px",
-      "background:#1d4ed8",
-      "color:#fff",
+      "background:var(--aiexporter-button-primary-background)",
+      "color:var(--aiexporter-button-primary-text)",
       "cursor:pointer",
       "font:600 12px/1.2 system-ui, sans-serif",
     ].join(";");
@@ -106,7 +111,7 @@ export function createDiscoveryUiController(
     for (const entry of entries.slice(-24).reverse()) {
       const row = document.createElement("div");
       row.textContent = `[${entry.time}] ${entry.message}`;
-      row.style.cssText = "padding:6px 8px;border-radius:8px;background:rgba(30,41,59,0.8);";
+      row.style.cssText = "padding:6px 8px;border-radius:8px;background:var(--aiexporter-surface-muted-background);";
       logList.appendChild(row);
     }
   };
