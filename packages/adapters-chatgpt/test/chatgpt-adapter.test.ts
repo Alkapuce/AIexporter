@@ -43,6 +43,65 @@ describe("chatgptAdapter", () => {
     expect(bundle.messages[1]?.markdown).toContain("```ts");
   });
 
+  it("preserves ChatGPT KaTeX as LaTeX instead of duplicated rendered text", async () => {
+    const dom = new JSDOM(
+      `
+        <html>
+          <head><title>Math Session | ChatGPT</title></head>
+          <body>
+            <main>
+              <div data-testid="conversation-turn-1">
+                <div data-message-author-role="assistant">
+                  <div class="markdown">
+                    <p>
+                      行内公式
+                      <span class="katex">
+                        <span class="katex-mathml">
+                          <math>
+                            <semantics>
+                              <mrow><mi>x</mi></mrow>
+                              <annotation encoding="application/x-tex">\\frac{xy}{x^2+y^2}</annotation>
+                            </semantics>
+                          </math>
+                        </span>
+                        <span class="katex-html" aria-hidden="true">xy/x²+y²</span>
+                      </span>
+                    </p>
+                    <div class="katex-display">
+                      <span class="katex">
+                        <span class="katex-mathml">
+                          <math>
+                            <semantics>
+                              <mrow><mi>x</mi></mrow>
+                              <annotation encoding="application/x-tex">\\lim_{x \\to 0} f(x)</annotation>
+                            </semantics>
+                          </math>
+                        </span>
+                        <span class="katex-html" aria-hidden="true">lim x→0 f(x)</span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </main>
+          </body>
+        </html>
+      `,
+      { url: "https://chatgpt.com/c/conv-math" },
+    );
+
+    const bundle = await chatgptAdapter.extractCurrentConversation({
+      document: dom.window.document,
+      window: dom.window as unknown as Window,
+      location: dom.window.location,
+    });
+
+    expect(bundle.messages[0]?.markdown).toContain("$\\frac{xy}{x^2+y^2}$");
+    expect(bundle.messages[0]?.markdown).toContain("$$\n\\lim_{x \\to 0} f(x)\n$$");
+    expect(bundle.messages[0]?.markdown).not.toContain("xy/x²+y²");
+    expect(bundle.messages[0]?.markdown).not.toContain("lim x→0 f(x)");
+  });
+
   it("extracts discovery payloads from list responses", () => {
     const payloads = extractDiscoveryPayloadsFromResponse({
       items: [

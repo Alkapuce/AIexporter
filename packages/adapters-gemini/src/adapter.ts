@@ -60,10 +60,19 @@ function formatThinkingBlock(thinking: string | undefined): string {
   return `> [thinking]\n> ${normalized.replace(/\n/g, "\n> ")}`.trim();
 }
 
-function extractGeminiResponseText(responseEntry: unknown): string | undefined {
+function replaceGeminiMiniAppBlocks(markdown: string, conversationUrl: string): string {
+  return markdown.replace(
+    /```(?:json)?\s*[\s\S]*?"id"\s*:\s*"(im_[a-z0-9]+)"[\s\S]*?```/gi,
+    (_match, miniAppId: string) =>
+      `> [interactive] [Open Gemini visualization demo (${miniAppId})](${conversationUrl})`,
+  );
+}
+
+function extractGeminiResponseText(responseEntry: unknown, conversationUrl: string): string | undefined {
   if (!Array.isArray(responseEntry)) return undefined;
   const plain = Array.isArray(responseEntry[1]) ? responseEntry[1][0] : undefined;
-  return typeof plain === "string" && plain.trim() ? plain.trim() : undefined;
+  if (typeof plain !== "string" || !plain.trim()) return undefined;
+  return replaceGeminiMiniAppBlocks(plain.trim(), conversationUrl);
 }
 
 function extractGeminiThinkingText(responseEntry: unknown): string | undefined {
@@ -92,6 +101,38 @@ interface GeminiRpcLinkedAttachment {
   title?: string;
   url: string;
   mimeType?: string;
+}
+
+function getGeminiAttachmentKey(attachment: GeminiRpcImageAttachment | GeminiRpcLinkedAttachment): string {
+  const title = (attachment as GeminiRpcImageAttachment).filename ?? (attachment as GeminiRpcLinkedAttachment).title ?? "";
+  return `${title.trim()}::${attachment.url.trim()}`;
+}
+
+function getGeminiTurnTimestampValue(entry: unknown): number | undefined {
+  if (!Array.isArray(entry) || !Array.isArray(entry[4])) return undefined;
+  const secondsValue = typeof entry[4][0] === "number" ? entry[4][0] : Number(entry[4][0]);
+  const nanosValue = typeof entry[4][1] === "number" ? entry[4][1] : Number(entry[4][1] ?? 0);
+  if (!Number.isFinite(secondsValue)) return undefined;
+  return secondsValue * 1_000 + Math.floor((Number.isFinite(nanosValue) ? nanosValue : 0) / 1_000_000);
+}
+
+function filterInheritedGeminiAttachments<T extends GeminiRpcImageAttachment | GeminiRpcLinkedAttachment>(
+  attachments: T[],
+  previousAttachments: T[],
+): T[] {
+  if (attachments.length === 0 || previousAttachments.length === 0) {
+    return attachments;
+  }
+
+  const currentKeys = new Set(attachments.map((attachment) => getGeminiAttachmentKey(attachment)));
+  const previousKeys = new Set(previousAttachments.map((attachment) => getGeminiAttachmentKey(attachment)));
+  const previousIsSubset = Array.from(previousKeys).every((key) => currentKeys.has(key));
+  if (!previousIsSubset) {
+    return attachments;
+  }
+
+  const filtered = attachments.filter((attachment) => !previousKeys.has(getGeminiAttachmentKey(attachment)));
+  return filtered.length > 0 ? filtered : [];
 }
 
 function isGeminiImageAttachmentCandidate(value: unknown[]): boolean {
@@ -188,17 +229,47 @@ export function parseGeminiConversationFromHnvQHbResponse(
 
   const inner = JSON.parse(outer[0][2]) as unknown;
   const turnEntries = Array.isArray(inner) && Array.isArray(inner[0]) ? inner[0] : [];
+  const orderedTurnEntries = turnEntries
+    .map((entry, index) => ({
+      entry,
+      index,
+      timestamp: getGeminiTurnTimestampValue(entry),
+    }))
+    .sort((left, right) => {
+      if (left.timestamp === undefined && right.timestamp === undefined) return left.index - right.index;
+      if (left.timestamp === undefined) return -1;
+      if (right.timestamp === undefined) return 1;
+      if (left.timestamp !== right.timestamp) return left.timestamp - right.timestamp;
+      return left.index - right.index;
+    })
+    .map((item) => item.entry);
   const messages: ConversationBundle["messages"] = [];
+  let previousPromptImageAttachments: GeminiRpcImageAttachment[] = [];
+  let previousPromptDocumentAttachments: GeminiRpcLinkedAttachment[] = [];
 
-  turnEntries.forEach((entry, index) => {
+  orderedTurnEntries.forEach((entry, index) => {
     if (!Array.isArray(entry)) return;
     const turnTimestamp = Array.isArray(entry[4]) ? normalizeGeminiTimestamp(entry[4][0], entry[4][1]) : undefined;
-    const promptImageAttachments = buildGeminiImageMarkdown(extractGeminiImageAttachments(entry[2]));
-    const promptDocumentAttachments = buildGeminiAttachmentMarkdown(extractGeminiDocumentAttachments(entry[2]));
+    const promptImageAttachments = extractGeminiImageAttachments(entry[2]);
+    const promptDocumentAttachments = extractGeminiDocumentAttachments(entry[2]);
+    const effectivePromptImageAttachments = filterInheritedGeminiAttachments(
+      promptImageAttachments,
+      previousPromptImageAttachments,
+    );
+    const effectivePromptDocumentAttachments = filterInheritedGeminiAttachments(
+      promptDocumentAttachments,
+      previousPromptDocumentAttachments,
+    );
+    previousPromptImageAttachments = promptImageAttachments;
+    previousPromptDocumentAttachments = promptDocumentAttachments;
     const prompt = Array.isArray(entry[2]) && Array.isArray(entry[2][0]) && typeof entry[2][0][0] === "string"
       ? entry[2][0][0].trim()
       : "";
-    const userParts = [...promptImageAttachments, ...promptDocumentAttachments, prompt].filter(Boolean);
+    const userParts = [
+      ...buildGeminiImageMarkdown(effectivePromptImageAttachments),
+      ...buildGeminiAttachmentMarkdown(effectivePromptDocumentAttachments),
+      prompt,
+    ].filter(Boolean);
     if (userParts.length > 0) {
       messages.push({
         id: `user-${index + 1}`,
@@ -209,7 +280,7 @@ export function parseGeminiConversationFromHnvQHbResponse(
     }
 
     const responseEntry = Array.isArray(entry[3]) && Array.isArray(entry[3][0]) ? entry[3][0][0] : undefined;
-    const responseTextValue = extractGeminiResponseText(responseEntry);
+    const responseTextValue = extractGeminiResponseText(responseEntry, url);
     const thinkingText = extractGeminiThinkingText(responseEntry);
     const assistantParts = [formatThinkingBlock(thinkingText), responseTextValue].filter(Boolean);
     if (assistantParts.length > 0) {

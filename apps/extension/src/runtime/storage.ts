@@ -239,18 +239,26 @@ export async function updateArtifactIndex(
 }
 
 export async function appendDebugLog(entry: DebugLogInput): Promise<DebugState> {
+  return appendDebugLogs([entry]);
+}
+
+export async function appendDebugLogs(entries: DebugLogInput[]): Promise<DebugState> {
+  if (entries.length === 0) {
+    return loadDebugState();
+  }
+
   return enqueueSerializedMutation("debug", async () => {
     const current = await loadDebugState();
-    const nextEntry: DebugLogEntry = {
+    const nextEntries: DebugLogEntry[] = entries.map((entry) => ({
       ...entry,
       id: crypto.randomUUID(),
       timestamp: new Date().toISOString(),
-    };
-    const logs = [nextEntry, ...current.logs].slice(0, current.maxEntries);
+    }));
+    const logs = [...nextEntries.reverse(), ...current.logs].slice(0, current.maxEntries);
     const nextState = {
       ...current,
       logs,
-      lastUpdatedAt: nextEntry.timestamp,
+      lastUpdatedAt: nextEntries[nextEntries.length - 1]?.timestamp ?? current.lastUpdatedAt,
     };
     await browser.storage.local.set({ [DEBUG_STORAGE_KEY]: nextState });
     return nextState;

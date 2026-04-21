@@ -1,11 +1,18 @@
 import { AIEXPORTER_EXPORT_COMPATIBILITY_VERSION, type ConversationBundle } from "@aiexporter/core-schema";
-import { formatConversationMessages, type ConversationFormat } from "./formats";
+import {
+  formatConversationMessages,
+  type ConversationFormat,
+  type ConversationRenderOptions,
+  type ConversationRenderPreset,
+} from "./formats";
 import { estimateTokens, formatTokenCount } from "./token-estimator";
 
 export interface SerializeOptions {
   revision: string;
   includeFrontmatter?: boolean;
   format?: ConversationFormat;
+  preset?: ConversationRenderPreset;
+  renderOptions?: ConversationRenderOptions;
   includeConversationHeader?: boolean;
   includeMessageTimestamps?: boolean;
 }
@@ -131,7 +138,14 @@ export function serializeConversation(
   const sections: string[] = [];
   const includeFrontmatter = options.includeFrontmatter ?? true;
   const format = options.format ?? "full";
-  const bodySections = formatConversationMessages(bundle, format, options.includeMessageTimestamps ?? true);
+  const preset = options.preset ?? "complete";
+  const bodySections = formatConversationMessages(
+    bundle,
+    format,
+    options.includeMessageTimestamps ?? true,
+    preset,
+    options.renderOptions,
+  );
   const messageCount = bodySections.length;
   const body = bodySections.length > 0 ? bodySections.join("\n\n") : "_(empty conversation)_";
   const bodyWithHeader =

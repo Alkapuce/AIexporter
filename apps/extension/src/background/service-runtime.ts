@@ -14,6 +14,7 @@ import { getNextPendingItem, mergeDiscoveryEvent, patchQueueItem, summarizeQueue
 import { removeDownloadedAsset } from "../runtime/downloads";
 import { markConversationIndexExportPending, upsertConversationIndexEntry } from "../runtime/indexes";
 import { createTraceLogger, writeBackgroundError, writeBackgroundLog } from "../runtime/logger";
+import { checkPathExistsWithNativeHost, recyclePathWithNativeHost, resolveExportRootWithNativeHost } from "../runtime/native-host";
 import {
   loadArtifactIndex,
   loadConversationIndex,
@@ -23,6 +24,9 @@ import {
   updateConversationIndex,
 } from "../runtime/storage";
 import { markBundleExportResult, persistBundle } from "./artifact-persistence";
+import { syncArtifactsWithDisk } from "./artifact-sync";
+import { recordArtifactSyncCompleted } from "./artifact-sync-state";
+import { getConfiguredExportRoot } from "./export-root";
 import {
   getPlatformConfig,
   getPlatformService,
@@ -33,7 +37,12 @@ import {
   removeWorkerLease,
   updateQueueStateWithDerived,
 } from "./state-access";
-import { GOOGLE_CHALLENGE_COOLDOWN_MS, STALE_BUSY_WORKER_RECOVERY_MS, getPlatformAlarmName } from "./shared";
+import {
+  GOOGLE_CHALLENGE_COOLDOWN_MS,
+  STALE_BUSY_WORKER_RECOVERY_MS,
+  getPlatformAlarmName,
+  sanitizePathSegment,
+} from "./shared";
 import {
   closeWorkerTab,
   ensureWorkerReceiver,
@@ -93,6 +102,7 @@ export interface BackgroundServiceRuntime {
   extractConversationFromTab(tabId: number, timeoutMs: number): Promise<ConversationBundle>;
   handleTabRemoved(tabId: number): Promise<void>;
   queuePassiveDiscoveryEvent(event: DiscoveryEvent): Promise<{ total: number; queued: number }>;
+  queuePassiveDiscoveryEvents(events: DiscoveryEvent[]): Promise<{ total: number; queued: number }>;
   requestPlatformStartupCatchup(platform: SourcePlatform): void;
   requestPlatformTick(platform: SourcePlatform): void;
   runPlatformDiscoverySweep(platform: SourcePlatform, mode?: DiscoverySweepMode): Promise<void>;
@@ -256,6 +266,21 @@ export function createBackgroundServiceRuntime(): BackgroundServiceRuntime {
 
   async function queuePassiveDiscoveryEvent(event: DiscoveryEvent): Promise<{ total: number; queued: number }> {
     return applyDiscoveryBatch([event], {
+      priority: "realtime",
+      discoveryState: "partial",
+    });
+  }
+
+  async function queuePassiveDiscoveryEvents(events: DiscoveryEvent[]): Promise<{ total: number; queued: number }> {
+    if (events.length === 0) {
+      return { total: 0, queued: 0 };
+    }
+
+    const deduped = Array.from(
+      events.reduce((map, event) => map.set(`${event.platform}:${event.sourceId}`, event), new Map<string, DiscoveryEvent>()).values(),
+    );
+
+    return applyDiscoveryBatch(deduped, {
       priority: "realtime",
       discoveryState: "partial",
     });
@@ -1694,6 +1719,55 @@ export function createBackgroundServiceRuntime(): BackgroundServiceRuntime {
     await saveArtifactIndex(artifacts.filter((entry) => entry.platform !== platform));
     await saveConversationIndex((await loadConversationIndex()).filter((entry) => entry.platform !== platform));
 
+    let recycledPaths = 0;
+    try {
+      const exportRoot = (await resolveExportRootWithNativeHost(getConfiguredExportRoot(stateBeforeClear.settings))).path;
+      if (exportRoot) {
+        const candidateRoots = [
+          `${exportRoot}\\AIexporter\\${sanitizePathSegment(platform)}`,
+          `${exportRoot}\\AIexporter\\Archive\\${sanitizePathSegment(platform)}`,
+        ];
+
+        for (const candidateRoot of candidateRoots) {
+          const existing = await checkPathExistsWithNativeHost(candidateRoot);
+          if (!existing.path) {
+            continue;
+          }
+          await recyclePathWithNativeHost(candidateRoot);
+          recycledPaths += 1;
+        }
+      }
+    } catch (error) {
+      await writeBackgroundLog("background.cleanup", "warn", "Best-effort platform file cleanup failed before sync.", {
+        platform,
+        error: getErrorMessage(error, "Platform file cleanup failed."),
+      });
+    }
+
+    let syncSummary:
+      | {
+          verifiedCount: number;
+          missingCount: number;
+          importedCount: number;
+          requeued: number;
+        }
+      | undefined;
+    try {
+      const syncResult = await syncArtifactsWithDisk(stateBeforeClear.settings, platform);
+      await recordArtifactSyncCompleted();
+      syncSummary = {
+        verifiedCount: syncResult.verifiedCount,
+        missingCount: syncResult.missingCount,
+        importedCount: syncResult.importedCount,
+        requeued: syncResult.requeueEvents.length,
+      };
+    } catch (error) {
+      await writeBackgroundLog("background.cleanup", "warn", "Best-effort artifact sync failed after clearing local records.", {
+        platform,
+        error: getErrorMessage(error, "Artifact sync after clear failed."),
+      });
+    }
+
     const currentState = await loadQueueState();
     const config = getPlatformConfig(currentState.settings, platform);
     const desiredRunning =
@@ -1722,6 +1796,8 @@ export function createBackgroundServiceRuntime(): BackgroundServiceRuntime {
     await writeBackgroundLog("background.cleanup", "warn", "Cleared local platform records.", {
       platform,
       deletedArtifactCount: targetArtifacts.length,
+      recycledPaths,
+      syncSummary,
       desiredRunning,
     });
 
@@ -1788,6 +1864,7 @@ export function createBackgroundServiceRuntime(): BackgroundServiceRuntime {
     extractConversationFromTab,
     handleTabRemoved,
     queuePassiveDiscoveryEvent,
+    queuePassiveDiscoveryEvents,
     requestPlatformStartupCatchup,
     requestPlatformTick,
     runPlatformDiscoverySweep,

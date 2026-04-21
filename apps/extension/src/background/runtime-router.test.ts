@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { QueueState } from "@aiexporter/adapter-sdk";
 import { createBackgroundRuntimeRouter } from "./runtime-router";
 
@@ -165,6 +165,7 @@ function createRouter() {
     extractConversationFromTab: vi.fn(),
     handleTabRemoved: vi.fn().mockResolvedValue(undefined),
     queuePassiveDiscoveryEvent: vi.fn().mockResolvedValue({ total: 1, queued: 1 }),
+    queuePassiveDiscoveryEvents: vi.fn().mockResolvedValue({ total: 2, queued: 2 }),
     requestPlatformStartupCatchup: vi.fn(),
     requestPlatformTick: vi.fn(),
     runPlatformDiscoverySweep: vi.fn().mockResolvedValue(undefined),
@@ -197,6 +198,10 @@ function createRouter() {
 }
 
 describe("background runtime router", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("returns queue state snapshots for queue-state-request", async () => {
     const { handler, queueState, deps } = createRouter();
 
@@ -241,11 +246,101 @@ describe("background runtime router", () => {
     expect(serviceRuntime.updatePlatformDesiredRunning).toHaveBeenCalledWith("gemini", true);
   });
 
-  it("rejects manual export without an active sender tab", async () => {
-    const { handler } = createRouter();
+  it("queues passive discovery batches and triggers platform ticks", async () => {
+    const { handler, serviceRuntime } = createRouter();
+
+    const events = [
+      {
+        platform: "deepseek" as const,
+        sourceId: "conv-1",
+        url: "https://chat.deepseek.com/a/chat/s/conv-1",
+        revisionFingerprint: "rev-1",
+      },
+      {
+        platform: "deepseek" as const,
+        sourceId: "conv-2",
+        url: "https://chat.deepseek.com/a/chat/s/conv-2",
+        revisionFingerprint: "rev-2",
+      },
+    ];
+
+    await handler({ type: "queue-discovery-batch", events }, { tab: { id: 9 } } as browser.runtime.MessageSender);
+
+    expect(serviceRuntime.queuePassiveDiscoveryEvents).toHaveBeenCalledWith(events);
+    expect(serviceRuntime.requestPlatformTick).toHaveBeenCalledWith("deepseek");
+  });
+
+  it("reloads the source tab and retries manual export when the receiver is unavailable", async () => {
+    const { handler, serviceRuntime, deps } = createRouter();
+    const bundle = {
+      platform: "deepseek" as const,
+      sourceId: "conv-1",
+      url: "https://chat.deepseek.com/a/chat/s/conv-1",
+      title: "DeepSeek Chat",
+      extractedAt: "2026-04-21T12:00:00.000Z",
+      participants: [
+        { id: "user", role: "user", name: "User" },
+        { id: "assistant", role: "assistant", name: "DeepSeek" },
+      ],
+      messages: [
+        { id: "m1", role: "user", markdown: "hello" },
+      ],
+    };
+    serviceRuntime.extractConversationFromTab
+      .mockRejectedValueOnce(new Error("Could not establish connection. Receiving end does not exist."))
+      .mockResolvedValueOnce(bundle);
+    deps.persistBundle.mockResolvedValue({
+      bundle,
+      revision: "rev-1",
+      files: ["AIexporter/deepseek/conv-1.md", "AIexporter/deepseek/conv-1.bundle.json"],
+      downloadIds: [101, 102],
+      artifactEntry: {
+        platform: "deepseek",
+        sourceId: "conv-1",
+        revision: "rev-1",
+        exportedAt: "2026-04-21T12:00:01.000Z",
+        localStatus: "present",
+        isLatestForConversation: true,
+      },
+      skipped: false,
+    });
+
+    vi.stubGlobal("browser", {
+      tabs: {
+        get: vi
+          .fn()
+          .mockResolvedValueOnce({ id: 11, url: "https://chat.deepseek.com/a/chat/s/conv-1", status: "complete" })
+          .mockResolvedValue({ id: 11, url: "https://chat.deepseek.com/a/chat/s/conv-1", title: "DeepSeek Chat", status: "complete" }),
+        reload: vi.fn().mockResolvedValue(undefined),
+      },
+    });
 
     await expect(
-      handler({ type: "manual-export-current", url: "https://chat.deepseek.com" }, {} as browser.runtime.MessageSender),
-    ).rejects.toThrow("Manual export requires an active conversation tab.");
+      handler(
+        {
+          type: "manual-export-run",
+          sourceTabId: 11,
+          options: {
+            preset: "standard",
+            includeMarkdown: true,
+            includeBundleJson: true,
+            markdownOptions: {
+              includeThinking: false,
+              includeImages: true,
+              includeAttachments: true,
+              includeMessageTimestamps: true,
+            },
+          },
+        },
+        {} as browser.runtime.MessageSender,
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      revision: "rev-1",
+      skipped: false,
+    });
+
+    expect(globalThis.browser.tabs.reload).toHaveBeenCalledWith(11);
+    expect(serviceRuntime.extractConversationFromTab).toHaveBeenCalledTimes(2);
   });
 });

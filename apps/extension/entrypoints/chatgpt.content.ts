@@ -1,104 +1,8 @@
 import { buildDiscoveryFingerprint, type MainWorldBridgeMessage, type RuntimeMessage } from "@aiexporter/adapter-sdk";
 import { chatgptAdapter, extractConversationIdFromUrl, parseChatGptConversationResponse } from "@aiexporter/adapters-chatgpt";
 import { normalizeConversationUrl } from "@aiexporter/core-schema";
+import { createDiscoveryBatchSender } from "../src/runtime/discovery-batch";
 import { createRuntimeLogger } from "../src/runtime/logger";
-import { startThemeSync } from "../src/ui/theme-runtime";
-
-const BUTTON_ID = "aiexporter-floating-export";
-const STATUS_ID = "aiexporter-floating-status";
-
-function ensureFloatingButton(): HTMLButtonElement {
-  const existing = document.getElementById(BUTTON_ID) as HTMLButtonElement | null;
-  if (existing) return existing;
-
-  const wrapper = document.createElement("div");
-  wrapper.id = BUTTON_ID;
-  wrapper.style.cssText = [
-    "position:fixed",
-    "right:20px",
-    "bottom:20px",
-    "z-index:2147483647",
-    "display:flex",
-    "flex-direction:column",
-    "gap:8px",
-    "align-items:flex-end",
-  ].join(";");
-
-  const button = document.createElement("button");
-  button.type = "button";
-  button.textContent = "Export Chat";
-  button.style.cssText = [
-    "border:none",
-    "border-radius:999px",
-    "padding:12px 16px",
-    "font:600 14px/1.2 system-ui",
-    "background:var(--aiexporter-button-primary-background)",
-    "color:var(--aiexporter-button-primary-text)",
-    "cursor:pointer",
-    "box-shadow:0 12px 28px rgba(0,0,0,0.18)",
-  ].join(";");
-
-  const status = document.createElement("div");
-  status.id = STATUS_ID;
-  status.style.cssText = [
-    "padding:6px 10px",
-    "border-radius:999px",
-    "background:var(--aiexporter-button-secondary-background)",
-    "color:var(--aiexporter-button-secondary-text)",
-    "font:500 12px/1.2 system-ui",
-    "display:none",
-  ].join(";");
-
-  wrapper.append(button, status);
-  document.body.appendChild(wrapper);
-  return button;
-}
-
-function setStatus(text: string, tone: "neutral" | "success" | "error" = "neutral"): void {
-  const status = document.getElementById(STATUS_ID);
-  if (!(status instanceof HTMLDivElement)) return;
-  status.textContent = text;
-  status.style.display = "block";
-  status.style.background =
-    tone === "success"
-      ? "var(--aiexporter-success-background)"
-      : tone === "error"
-        ? "var(--aiexporter-danger-background)"
-        : "var(--aiexporter-button-secondary-background)";
-  status.style.color =
-    tone === "success"
-      ? "var(--aiexporter-success-text-color)"
-      : tone === "error"
-        ? "var(--aiexporter-danger-text-color)"
-        : "var(--aiexporter-button-secondary-text)";
-  window.setTimeout(() => {
-    status.style.display = "none";
-  }, 2500);
-}
-
-function summarizeManualExportResult(result: unknown): string {
-  const payload = result as
-    | {
-        __aiexporterError?: string;
-        ok?: boolean;
-        revision?: string;
-        files?: string[];
-        downloadIds?: number[];
-      }
-    | undefined;
-
-  const files = payload?.files ?? [];
-  const fileCount = files.length;
-  const ids = payload?.downloadIds?.filter((value): value is number => typeof value === "number") ?? [];
-  const shortNames = files.map((file) => file.split(/[/\\]/).pop()).filter(Boolean).slice(0, 2);
-
-  if (fileCount === 0) {
-    const summary = JSON.stringify(result ?? null);
-    return `Export finished, but no files were reported. Payload: ${summary?.slice(0, 180) ?? "null"}`;
-  }
-
-  return `Saved ${fileCount} files${shortNames.length > 0 ? `: ${shortNames.join(", ")}` : ""}${ids.length > 0 ? ` (downloads: ${ids.join(", ")})` : ""}${payload?.revision ? ` rev:${payload.revision.slice(0, 8)}` : ""}`;
-}
 
 async function queueCurrentConversation(): Promise<void> {
   const sourceId = extractConversationIdFromUrl(window.location.href);
@@ -122,13 +26,6 @@ async function queueCurrentConversation(): Promise<void> {
   };
 
   await browser.runtime.sendMessage(message);
-}
-
-function unwrapRuntimeResponse<T>(response: T | { __aiexporterError?: string }): T {
-  if (response && typeof response === "object" && "__aiexporterError" in response) {
-    throw new Error((response as { __aiexporterError?: string }).__aiexporterError ?? "Unknown background error");
-  }
-  return response as T;
 }
 
 function installUrlChangeMonitor(onChange: (url: string) => void): () => void {
@@ -230,7 +127,6 @@ async function fetchChatGptConversationViaPageWorld(sourceId: string) {
 export default defineContentScript({
   matches: ["https://chatgpt.com/*"],
   async main() {
-    startThemeSync(document, { styleBody: false });
     const log = createRuntimeLogger("content.chatgpt");
     await log("info", "ChatGPT content script initialized.", {
       url: window.location.href,
@@ -241,33 +137,15 @@ export default defineContentScript({
     });
     await log("debug", "Injected ChatGPT main-world bridge.");
 
-    const button = ensureFloatingButton();
-    button.addEventListener("click", async () => {
-      button.disabled = true;
-      button.textContent = "Exporting...";
-      await log("info", "Manual export button clicked.", {
-        url: window.location.href,
-      });
-      try {
-        const result = unwrapRuntimeResponse(
-          await browser.runtime.sendMessage({
-            type: "manual-export-current",
-            url: window.location.href,
-          } satisfies RuntimeMessage),
-        );
-        await log("info", "Manual export completed.", {
-          result: result as Record<string, unknown>,
+    const batchSender = createDiscoveryBatchSender({
+      platform: "chatgpt",
+      onFlush: async ({ events, reason }) => {
+        await log("debug", "ChatGPT passive discovery batch flushed.", {
+          code: "discovery.batch_flushed",
+          batchSize: events.length,
+          reason,
         });
-        setStatus(summarizeManualExportResult(result), "success");
-      } catch (error) {
-        await log("error", "Manual export failed.", {
-          error: error instanceof Error ? error.message : "Manual export failed",
-        });
-        setStatus(error instanceof Error ? error.message : "Manual export failed", "error");
-      } finally {
-        button.disabled = false;
-        button.textContent = "Export Chat";
-      }
+      },
     });
 
     const onWindowMessage = async (event: MessageEvent<MainWorldBridgeMessage & { source?: string }>) => {
@@ -279,16 +157,11 @@ export default defineContentScript({
         payload: event.data.payload,
       });
       const revisionFingerprint = await buildDiscoveryFingerprint("chatgpt", event.data.payload);
-      unwrapRuntimeResponse(
-        await browser.runtime.sendMessage({
-          type: "queue-discovery",
-          event: {
-            platform: "chatgpt",
-            ...event.data.payload,
-            revisionFingerprint,
-          },
-        } satisfies RuntimeMessage),
-      );
+      await batchSender.enqueue({
+        platform: "chatgpt",
+        ...event.data.payload,
+        revisionFingerprint,
+      });
     };
 
     window.addEventListener("message", onWindowMessage);

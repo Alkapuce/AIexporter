@@ -3,18 +3,36 @@ import type {
   DebugState,
   ExtensionSettings,
   ExportArtifactEntry,
+  ManualExportOptions,
   PlatformRuntimeConfig,
   QueueItemStatus,
   QueueState,
   RuntimeMessage,
 } from "@aiexporter/adapter-sdk";
-import type { SourcePlatform } from "@aiexporter/core-schema";
+import { normalizeConversationUrl, type SourcePlatform } from "@aiexporter/core-schema";
 
 export interface DashboardStateSnapshot {
   queueState: QueueState;
   debugState: DebugState;
   artifactIndex: ExportArtifactEntry[];
   conversationIndex: ConversationIndexEntry[];
+}
+
+export interface ActiveConversationTarget {
+  tabId?: number;
+  url?: string;
+  title?: string;
+  platform?: SourcePlatform;
+  supported: boolean;
+}
+
+function inferPlatformFromUrl(url: string | undefined): SourcePlatform | undefined {
+  if (!url) return undefined;
+  if (/^https:\/\/chatgpt\.com\/c\//i.test(url)) return "chatgpt";
+  if (/^https:\/\/chat\.deepseek\.com\/a\/chat\//i.test(url)) return "deepseek";
+  if (/^https:\/\/gemini\.google\.com\/app\//i.test(url)) return "gemini";
+  if (/^https:\/\/aistudio\.google\.com\/prompts\/(?!new_chat)/i.test(url)) return "aistudio";
+  return undefined;
 }
 
 async function sendMessage<T>(message: RuntimeMessage, timeoutMs = 10_000): Promise<T> {
@@ -130,12 +148,16 @@ export function exportLogs(): Promise<unknown> {
   return sendMessage({ type: "dashboard-log-export-request" });
 }
 
-export function pickExportRoot(): Promise<{ path?: string }> {
-  return sendMessage({ type: "downloads-pick-export-root" });
+export function pickExportRoot(currentPath?: string): Promise<{ path?: string }> {
+  return sendMessage({ type: "downloads-pick-export-root", currentPath });
 }
 
 export function resolveExportRoot(): Promise<{ path?: string }> {
   return sendMessage({ type: "downloads-resolve-export-root" });
+}
+
+export function resolveDefaultDownloadsRoot(): Promise<{ path?: string }> {
+  return sendMessage({ type: "downloads-resolve-default-root" });
 }
 
 export function syncArtifacts(platform?: SourcePlatform): Promise<unknown> {
@@ -143,7 +165,7 @@ export function syncArtifacts(platform?: SourcePlatform): Promise<unknown> {
 }
 
 export function openSourceUrl(url: string): void {
-  window.open(url, "_blank", "noopener,noreferrer");
+  window.open(normalizeConversationUrl(url), "_blank", "noopener,noreferrer");
 }
 
 export function openDashboard(): Promise<browser.tabs.Tab> {
@@ -151,6 +173,21 @@ export function openDashboard(): Promise<browser.tabs.Tab> {
     url: browser.runtime.getURL("dashboard.html"),
     active: true,
   });
+}
+
+export async function getActiveConversationTarget(): Promise<ActiveConversationTarget> {
+  const [tab] = await browser.tabs.query({
+    active: true,
+    lastFocusedWindow: true,
+  });
+  const platform = inferPlatformFromUrl(tab?.url);
+  return {
+    tabId: tab?.id,
+    url: tab?.url,
+    title: tab?.title,
+    platform,
+    supported: Boolean(typeof tab?.id === "number" && platform),
+  };
 }
 
 type ChromeDownloadsAction = "open" | "show";
@@ -213,4 +250,25 @@ export function showArtifactFolder(platform: SourcePlatform, sourceId: string): 
     platform,
     sourceId,
   });
+}
+
+export function runManualExport(
+  sourceTabId: number,
+  options: ManualExportOptions,
+): Promise<{
+  ok: true;
+  revision: string;
+  files: string[];
+  downloadIds: number[];
+  skipped: boolean;
+}> {
+  return sendMessage({
+    type: "manual-export-run",
+    sourceTabId,
+    options,
+  }, 60_000);
+}
+
+export function getSettingsSnapshot(): Promise<QueueState> {
+  return sendMessage<QueueState>({ type: "settings-get" });
 }

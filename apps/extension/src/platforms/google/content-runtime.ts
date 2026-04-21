@@ -7,7 +7,7 @@ import {
 } from "@aiexporter/adapter-sdk";
 import type { ConversationBundle, SourcePlatform } from "@aiexporter/core-schema";
 import type { BridgeNetworkPayload } from "@aiexporter/adapter-sdk";
-import { ensureGoogleFloatingButton, setGoogleFloatingStatus, summarizeGoogleManualExportResult } from "./ui";
+import { createDiscoveryBatchSender } from "../../runtime/discovery-batch";
 import { createDiscoveryUiController, type DiscoveryUiController } from "./discovery-ui";
 
 declare global {
@@ -61,13 +61,6 @@ interface HistoryCollectionOptions {
 }
 
 const CONVERSATION_INDEX_STORAGE_KEY = "aiexporter.conversationIndex";
-
-function unwrapRuntimeResponse<T>(response: T | { __aiexporterError?: string }): T {
-  if (response && typeof response === "object" && "__aiexporterError" in response) {
-    throw new Error((response as { __aiexporterError?: string }).__aiexporterError ?? "Unknown background error");
-  }
-  return response as T;
-}
 
 function isWorkerPageContext(search = window.location.search): boolean {
   return new URLSearchParams(search).get("aiexporter_worker") === "1";
@@ -151,41 +144,6 @@ async function queueCurrentConversation(options: GooglePlatformRuntimeOptions, l
     sourceId,
     url: window.location.href,
   });
-}
-
-async function handleManualExport(
-  options: GooglePlatformRuntimeOptions,
-  log: RuntimeLogger,
-  button: HTMLButtonElement,
-): Promise<void> {
-  button.disabled = true;
-  button.textContent = "Exporting...";
-  try {
-    const result = unwrapRuntimeResponse(
-      await browser.runtime.sendMessage({
-        type: "manual-export-current",
-        url: window.location.href,
-      } satisfies RuntimeMessage),
-    );
-    await log("info", `${options.siteName} manual export completed.`, {
-      platform: options.platform,
-      result: result as Record<string, unknown>,
-    });
-    setGoogleFloatingStatus(options.platform, summarizeGoogleManualExportResult(result), "success");
-  } catch (error) {
-    await log("error", `${options.siteName} manual export failed.`, {
-      platform: options.platform,
-      error: error instanceof Error ? error.message : `${options.siteName} manual export failed`,
-    });
-    setGoogleFloatingStatus(
-      options.platform,
-      error instanceof Error ? error.message : `${options.siteName} manual export failed`,
-      "error",
-    );
-  } finally {
-    button.disabled = false;
-    button.textContent = "Export Chat";
-  }
 }
 
 function isScrollableContainer(element: HTMLElement): boolean {
@@ -952,10 +910,18 @@ export async function mountGoogleContentRuntime(options: GooglePlatformRuntimeOp
     [options.platform]: true,
   };
 
-  const button = ensureGoogleFloatingButton(options.platform);
-  button.addEventListener("click", () => {
-    void handleManualExport(options, log, button);
+  const batchSender = createDiscoveryBatchSender({
+    platform: options.platform,
+    onFlush: async ({ events, reason }) => {
+      await log("debug", `${options.siteName} passive discovery batch flushed.`, {
+        code: "discovery.batch_flushed",
+        platform: options.platform,
+        batchSize: events.length,
+        reason,
+      });
+    },
   });
+
   const discoveryController =
     options.platform === "gemini" && isDiscoveryPageContext()
       ? createDiscoveryUiController(options.platform, options.siteName, {
@@ -987,14 +953,11 @@ export async function mountGoogleContentRuntime(options: GooglePlatformRuntimeOp
       discoveryPayloadBuffer.set(payload.sourceId, payload);
 
       const revisionFingerprint = await buildDiscoveryFingerprint(options.platform, payload);
-      await browser.runtime.sendMessage({
-        type: "queue-discovery",
-        event: {
-          platform: options.platform,
-          ...payload,
-          revisionFingerprint,
-        },
-      } satisfies RuntimeMessage);
+      await batchSender.enqueue({
+        platform: options.platform,
+        ...payload,
+        revisionFingerprint,
+      });
 
       await log("debug", `Queued ${options.siteName} network discovery payload.`, {
         platform: options.platform,

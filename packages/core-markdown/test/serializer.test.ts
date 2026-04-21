@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ConversationBundle } from "@aiexporter/core-schema";
 import { serializeConversation } from "../src/serializer";
 
-const EXPECTED_EXPORT_COMPATIBILITY_VERSION = "2026-04-15.2";
+const EXPECTED_EXPORT_COMPATIBILITY_VERSION = "2026-04-18.1";
 
 describe("serializeConversation", () => {
   it("renders frontmatter and message sections", () => {
@@ -155,6 +155,111 @@ describe("serializeConversation", () => {
     expect(result.markdown).toContain("<summary>Thinking</summary>");
     expect(result.markdown).toContain("first line");
     expect(result.markdown).toContain("Final answer");
+  });
+
+  it("omits thinking blocks in the standard preset", () => {
+    const bundle: ConversationBundle = {
+      platform: "deepseek",
+      sourceId: "conv-standard",
+      url: "https://chat.deepseek.com/a/chat/s/conv-standard",
+      title: "Standard Chat",
+      extractedAt: "2026-03-18T08:00:00.000Z",
+      participants: [{ id: "assistant", role: "assistant", name: "DeepSeek" }],
+      messages: [
+        {
+          id: "m1",
+          role: "assistant",
+          markdown: "> [thinking]\n> internal plan\n\nFinal answer",
+        },
+      ],
+    };
+
+    const result = serializeConversation(bundle, { revision: "standard123", preset: "standard" });
+    expect(result.markdown).not.toContain("<summary>Thinking</summary>");
+    expect(result.markdown).toContain("Final answer");
+  });
+
+  it("omits thinking, images, and attachment blocks in the share preset", () => {
+    const bundle: ConversationBundle = {
+      platform: "gemini",
+      sourceId: "conv-share",
+      url: "https://gemini.google.com/app/conv-share",
+      title: "Share Chat",
+      extractedAt: "2026-03-18T08:00:00.000Z",
+      participants: [{ id: "assistant", role: "assistant", name: "Gemini" }],
+      messages: [
+        {
+          id: "m1",
+          role: "assistant",
+          markdown: [
+            "> [thinking]",
+            "> hidden",
+            "",
+            "正文保留",
+            "",
+            "![diagram](https://example.com/diagram.png)",
+            "",
+            "> [attachment] [spec.pdf](https://example.com/spec.pdf)",
+            "",
+            "```ts",
+            "console.log('keep code');",
+            "```",
+          ].join("\n"),
+        },
+      ],
+    };
+
+    const result = serializeConversation(bundle, { revision: "share123", preset: "share" });
+    expect(result.markdown).toContain("正文保留");
+    expect(result.markdown).toContain("console.log('keep code');");
+    expect(result.markdown).not.toContain("diagram.png");
+    expect(result.markdown).not.toContain("[attachment]");
+    expect(result.markdown).not.toContain("<summary>Thinking</summary>");
+  });
+
+  it("supports custom markdown render options independent from presets", () => {
+    const bundle: ConversationBundle = {
+      platform: "gemini",
+      sourceId: "conv-custom-render",
+      url: "https://gemini.google.com/app/conv-custom-render",
+      title: "Custom Render Chat",
+      extractedAt: "2026-03-18T08:00:00.000Z",
+      participants: [{ id: "assistant", role: "assistant", name: "Gemini" }],
+      messages: [
+        {
+          id: "m1",
+          role: "assistant",
+          markdown: [
+            "> [thinking]",
+            "> hidden",
+            "",
+            "正文保留",
+            "",
+            "![diagram](https://example.com/diagram.png)",
+            "",
+            "> [attachment] [spec.pdf](https://example.com/spec.pdf)",
+          ].join("\n"),
+          createdAt: "2026-03-18T08:05:00.000Z",
+        },
+      ],
+    };
+
+    const result = serializeConversation(bundle, {
+      revision: "custom123",
+      preset: "complete",
+      renderOptions: {
+        includeThinking: false,
+        includeImages: true,
+        includeAttachments: false,
+      },
+      includeMessageTimestamps: false,
+    });
+
+    expect(result.markdown).toContain("正文保留");
+    expect(result.markdown).toContain("diagram.png");
+    expect(result.markdown).not.toContain("[attachment]");
+    expect(result.markdown).not.toContain("<summary>Thinking</summary>");
+    expect(result.markdown).not.toMatch(/> 20\d{2}-\d{2}-\d{2}/);
   });
 
   it("wraps bare URLs so surrounding CJK text does not merge into the link", () => {

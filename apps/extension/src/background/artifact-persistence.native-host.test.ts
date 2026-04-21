@@ -1,0 +1,365 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { QueueState } from "@aiexporter/adapter-sdk";
+import type { ConversationBundle } from "@aiexporter/core-schema";
+
+const writtenPaths = new Set<string>();
+const downloadBinaryAsset = vi.fn();
+const downloadRemoteAsset = vi.fn();
+const downloadTextAsset = vi.fn();
+const isDownloadedAssetPresent = vi.fn().mockResolvedValue(false);
+const openDownloadedAsset = vi.fn();
+const removeDownloadedAsset = vi.fn();
+const showDownloadedAsset = vi.fn();
+const writeBackgroundLog = vi.fn().mockResolvedValue(undefined);
+const syncBundleToServer = vi.fn().mockResolvedValue(undefined);
+const loadArtifactIndex = vi.fn().mockResolvedValue([]);
+const loadConversationIndex = vi.fn().mockResolvedValue([]);
+const updateArtifactIndex = vi.fn().mockImplementation(async (updater: (entries: never[]) => unknown) => updater([]));
+const updateConversationIndex = vi.fn();
+const loadQueueState = vi.fn();
+const pingNativeHost = vi.fn().mockResolvedValue({ ok: true });
+const writeFileWithNativeHost = vi.fn().mockImplementation(
+  async (relativePath: string, content: string, encoding: "utf8" | "base64", rootPath?: string) => {
+    const resolvedRoot = rootPath ?? "C:\\Users\\qpj\\Downloads";
+    const resolvedPath = `${resolvedRoot.replace(/[\\/]+$/, "")}\\${relativePath.replace(/\//g, "\\")}`;
+    writtenPaths.add(resolvedPath.toLowerCase());
+    return {
+      ok: true,
+      path: resolvedPath,
+      content,
+      encoding,
+    };
+  },
+);
+const checkPathExistsWithNativeHost = vi.fn().mockImplementation(async (path: string) => ({
+  ok: true,
+  path: writtenPaths.has(path.toLowerCase()) ? path : undefined,
+}));
+const movePathWithNativeHost = vi.fn();
+const openFileWithNativeHost = vi.fn();
+const pruneOldFilesWithNativeHost = vi.fn();
+const recyclePathWithNativeHost = vi.fn();
+const relocateFileWithNativeHost = vi.fn();
+const showFolderWithNativeHost = vi.fn();
+const refreshQueueServices = vi.fn().mockResolvedValue(undefined);
+
+vi.mock("../runtime/downloads", () => ({
+  downloadBinaryAsset,
+  downloadRemoteAsset,
+  downloadTextAsset,
+  isDownloadedAssetPresent,
+  openDownloadedAsset,
+  removeDownloadedAsset,
+  showDownloadedAsset,
+}));
+
+vi.mock("../runtime/logger", () => ({
+  writeBackgroundLog,
+}));
+
+vi.mock("../runtime/server-sync", () => ({
+  syncBundleToServer,
+}));
+
+vi.mock("../runtime/storage", () => ({
+  loadArtifactIndex,
+  loadConversationIndex,
+  loadQueueState,
+  updateArtifactIndex,
+  updateConversationIndex,
+}));
+
+vi.mock("../runtime/native-host", () => ({
+  checkPathExistsWithNativeHost,
+  movePathWithNativeHost,
+  openFileWithNativeHost,
+  pingNativeHost,
+  pruneOldFilesWithNativeHost,
+  recyclePathWithNativeHost,
+  relocateFileWithNativeHost,
+  showFolderWithNativeHost,
+  writeFileWithNativeHost,
+}));
+
+vi.mock("./state-access", () => ({
+  refreshQueueServices,
+}));
+
+function createQueueState(exportRootPath?: string): QueueState {
+  return {
+    items: [],
+    activeWorkers: [],
+    lastProcessedAt: undefined,
+    settings: {
+      syncToServer: false,
+      serverUrl: "",
+      browserLabel: "",
+      uiLocale: "zh-CN",
+      uiThemeMode: "system",
+      dashboardOpenBehavior: "tab",
+      scheduler: {
+        autoStartOnBrowserLaunch: false,
+        globalPaused: false,
+        logRetentionEntries: 1000,
+      },
+      downloads: {
+        mode: "downloads-api",
+        hideDownloadUi: true,
+        skipIfLatestExists: false,
+        retainLocalRevisionCount: 1,
+        openFileActionsEnabled: true,
+        exportRootPath,
+      },
+      platforms: {
+        chatgpt: {
+          enabled: true,
+          autoExportEnabled: true,
+          historyBackfillEnabled: true,
+          discoveryMode: "passive_only",
+          maxConcurrency: 1,
+          minStartIntervalMs: 0,
+          navigationTimeoutMs: 0,
+          settleDelayMs: 0,
+          discoverySweepIntervalMs: 0,
+          reuseWorkerTabs: true,
+          bootstrapRequireFullHistory: false,
+          bootstrapWindowMode: "background_tab",
+          discoveryReadyTimeoutMs: 0,
+          discoveryScrollStableRounds: 0,
+          discoveryDomMaxCycles: 0,
+          discoveryDomPostScrollWaitMs: 0,
+          discoveryDomStableCycles: 0,
+          discoveryDomScrollBottomAttempts: 0,
+          receiverReadyTimeoutMs: 0,
+          receiverRetryLimit: 0,
+          apiExtractMode: "page_world_first",
+        },
+        gemini: {
+          enabled: true,
+          autoExportEnabled: true,
+          historyBackfillEnabled: true,
+          discoveryMode: "passive_only",
+          maxConcurrency: 1,
+          minStartIntervalMs: 0,
+          navigationTimeoutMs: 0,
+          settleDelayMs: 0,
+          discoverySweepIntervalMs: 0,
+          reuseWorkerTabs: true,
+          bootstrapRequireFullHistory: false,
+          bootstrapWindowMode: "background_tab",
+          discoveryReadyTimeoutMs: 0,
+          discoveryScrollStableRounds: 0,
+          discoveryDomMaxCycles: 0,
+          discoveryDomPostScrollWaitMs: 0,
+          discoveryDomStableCycles: 0,
+          discoveryDomScrollBottomAttempts: 0,
+          receiverReadyTimeoutMs: 0,
+          receiverRetryLimit: 0,
+          apiExtractMode: "page_world_first",
+        },
+        aistudio: {
+          enabled: true,
+          autoExportEnabled: true,
+          historyBackfillEnabled: true,
+          discoveryMode: "passive_only",
+          maxConcurrency: 1,
+          minStartIntervalMs: 0,
+          navigationTimeoutMs: 0,
+          settleDelayMs: 0,
+          discoverySweepIntervalMs: 0,
+          reuseWorkerTabs: true,
+          bootstrapRequireFullHistory: false,
+          bootstrapWindowMode: "background_tab",
+          discoveryReadyTimeoutMs: 0,
+          discoveryScrollStableRounds: 0,
+          discoveryDomMaxCycles: 0,
+          discoveryDomPostScrollWaitMs: 0,
+          discoveryDomStableCycles: 0,
+          discoveryDomScrollBottomAttempts: 0,
+          receiverReadyTimeoutMs: 0,
+          receiverRetryLimit: 0,
+          apiExtractMode: "page_world_first",
+        },
+        deepseek: {
+          enabled: true,
+          autoExportEnabled: true,
+          historyBackfillEnabled: true,
+          discoveryMode: "passive_only",
+          maxConcurrency: 1,
+          minStartIntervalMs: 0,
+          navigationTimeoutMs: 0,
+          settleDelayMs: 0,
+          discoverySweepIntervalMs: 0,
+          reuseWorkerTabs: true,
+          bootstrapRequireFullHistory: false,
+          bootstrapWindowMode: "background_tab",
+          discoveryReadyTimeoutMs: 0,
+          discoveryScrollStableRounds: 0,
+          discoveryDomMaxCycles: 0,
+          discoveryDomPostScrollWaitMs: 0,
+          discoveryDomStableCycles: 0,
+          discoveryDomScrollBottomAttempts: 0,
+          receiverReadyTimeoutMs: 0,
+          receiverRetryLimit: 0,
+          apiExtractMode: "page_world_first",
+        },
+      },
+    },
+    services: {
+      chatgpt: {
+        platform: "chatgpt",
+        status: "idle",
+        desiredRunning: false,
+        activeWorkers: 0,
+        activeDiscoveryTabs: 0,
+        stats: { discoveredTotal: 0, exportedTotal: 0, pending: 0, processing: 0, completed: 0, failed: 0 },
+      },
+      gemini: {
+        platform: "gemini",
+        status: "idle",
+        desiredRunning: false,
+        activeWorkers: 0,
+        activeDiscoveryTabs: 0,
+        stats: { discoveredTotal: 0, exportedTotal: 0, pending: 0, processing: 0, completed: 0, failed: 0 },
+      },
+      aistudio: {
+        platform: "aistudio",
+        status: "idle",
+        desiredRunning: false,
+        activeWorkers: 0,
+        activeDiscoveryTabs: 0,
+        stats: { discoveredTotal: 0, exportedTotal: 0, pending: 0, processing: 0, completed: 0, failed: 0 },
+      },
+      deepseek: {
+        platform: "deepseek",
+        status: "idle",
+        desiredRunning: false,
+        activeWorkers: 0,
+        activeDiscoveryTabs: 0,
+        stats: { discoveredTotal: 0, exportedTotal: 0, pending: 0, processing: 0, completed: 0, failed: 0 },
+      },
+    },
+  };
+}
+
+function createBundle(): ConversationBundle {
+  return {
+    platform: "gemini",
+    sourceId: "ffe8f30590386ce1",
+    url: "https://gemini.google.com/app/ffe8f30590386ce1",
+    title: "Remote Asset Conversation",
+    extractedAt: "2026-04-21T09:36:43.249Z",
+    participants: [
+      { id: "user", role: "user", name: "User" },
+      { id: "assistant", role: "assistant", name: "Gemini" },
+    ],
+    messages: [
+      {
+        id: "user-1",
+        role: "user",
+        markdown: "请导出这张图",
+      },
+      {
+        id: "assistant-1",
+        role: "assistant",
+        markdown: "![diagram](https://example.com/assets/diagram.png)",
+      },
+    ],
+  };
+}
+
+describe("persistBundle native host persistence", () => {
+  beforeEach(() => {
+    writtenPaths.clear();
+    vi.clearAllMocks();
+    loadArtifactIndex.mockResolvedValue([]);
+    loadConversationIndex.mockResolvedValue([]);
+    updateArtifactIndex.mockImplementation(async (updater: (entries: never[]) => unknown) => updater([]));
+    loadQueueState.mockResolvedValue(createQueueState("C:\\exports"));
+    pingNativeHost.mockResolvedValue({ ok: true });
+    writeFileWithNativeHost.mockImplementation(
+      async (relativePath: string, content: string, encoding: "utf8" | "base64", rootPath?: string) => {
+        const resolvedRoot = rootPath ?? "C:\\Users\\qpj\\Downloads";
+        const resolvedPath = `${resolvedRoot.replace(/[\\/]+$/, "")}\\${relativePath.replace(/\//g, "\\")}`;
+        writtenPaths.add(resolvedPath.toLowerCase());
+        return {
+          ok: true,
+          path: resolvedPath,
+          content,
+          encoding,
+        };
+      },
+    );
+    checkPathExistsWithNativeHost.mockImplementation(async (path: string) => ({
+      ok: true,
+      path: writtenPaths.has(path.toLowerCase()) ? path : undefined,
+    }));
+    downloadRemoteAsset.mockImplementation(
+      async (relativePath: string, _url: string, _options: { forceFresh?: boolean } = {}, rootPath?: string) => {
+        const resolvedRoot = rootPath ?? "C:\\Users\\qpj\\Downloads";
+        const resolvedPath = `${resolvedRoot.replace(/[\\/]+$/, "")}\\${relativePath.replace(/\//g, "\\")}`;
+        writtenPaths.add(resolvedPath.toLowerCase());
+        return {
+          downloadId: 1001,
+          filename: resolvedPath,
+        };
+      },
+    );
+    vi.stubGlobal("browser", {
+      runtime: {
+        getManifest: () => ({
+          version: "0.2.2",
+        }),
+      },
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        arrayBuffer: async () => Uint8Array.from([1, 2, 3, 4]).buffer,
+      }),
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("writes text artifacts through native host and remote embedded assets through downloads API", async () => {
+    const { persistBundle } = await import("./artifact-persistence");
+
+    const result = await persistBundle(createBundle(), createQueueState("C:\\exports").settings);
+
+    expect(writeFileWithNativeHost).toHaveBeenCalledTimes(2);
+    expect(writeFileWithNativeHost).toHaveBeenNthCalledWith(
+      1,
+      expect.stringMatching(/^AIexporter\/gemini\/.+\.md$/),
+      expect.any(String),
+      "utf8",
+      "C:\\exports",
+    );
+    expect(writeFileWithNativeHost).toHaveBeenNthCalledWith(
+      2,
+      expect.stringMatching(/^AIexporter\/gemini\/.+\.bundle\.json$/),
+      expect.any(String),
+      "utf8",
+      "C:\\exports",
+    );
+    expect(downloadRemoteAsset).toHaveBeenCalledTimes(1);
+    expect(downloadRemoteAsset).toHaveBeenCalledWith(
+      expect.stringMatching(/^AIexporter\/gemini\/.+\.assets\/01-diagram\.png$/),
+      "https://example.com/assets/diagram.png",
+      {},
+      "C:\\exports",
+    );
+    expect(result.files).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/^C:\\exports\\AIexporter\\gemini\\.+\.md$/),
+        expect.stringMatching(/^C:\\exports\\AIexporter\\gemini\\.+\.bundle\.json$/),
+        expect.stringMatching(/^C:\\exports\\AIexporter\\gemini\\.+\.assets\\01-diagram\.png$/),
+      ]),
+    );
+  });
+});

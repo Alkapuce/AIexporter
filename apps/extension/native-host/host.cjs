@@ -210,6 +210,44 @@ function ensureParentDirectory(filePath) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
 }
 
+function isPathWithinRoot(candidatePath, rootPath) {
+  const normalizedCandidate = path.resolve(normalizePath(candidatePath));
+  const normalizedRoot = path.resolve(normalizePath(rootPath));
+  const relative = path.relative(normalizedRoot, normalizedCandidate);
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+function pruneEmptyParentDirectories(startPath, stopPath) {
+  let currentPath = normalizePath(startPath);
+  const normalizedStop = normalizePath(stopPath);
+
+  while (currentPath !== normalizedStop && isPathWithinRoot(currentPath, normalizedStop)) {
+    if (!fs.existsSync(currentPath) || !fs.statSync(currentPath).isDirectory()) {
+      break;
+    }
+
+    if (fs.readdirSync(currentPath).length > 0) {
+      break;
+    }
+
+    fs.rmdirSync(currentPath);
+    const parentPath = path.dirname(currentPath);
+    if (parentPath === currentPath) {
+      break;
+    }
+    currentPath = parentPath;
+  }
+}
+
+function cleanupRelocatedSourceDirectories(sourcePath) {
+  const downloadsRoot = getDownloadsDirectory();
+  const sourceDirectory = path.dirname(normalizePath(sourcePath));
+  if (!fs.existsSync(downloadsRoot) || !isPathWithinRoot(sourceDirectory, downloadsRoot)) {
+    return;
+  }
+  pruneEmptyParentDirectories(sourceDirectory, downloadsRoot);
+}
+
 function resolveExportRoot(rootPath) {
   const candidate = typeof rootPath === "string" && rootPath.trim() ? normalizePath(rootPath.trim()) : getDownloadsDirectory();
   fs.mkdirSync(candidate, { recursive: true });
@@ -250,6 +288,7 @@ function relocateFile(sourcePath, relativePath, rootPath) {
     fs.rmSync(normalizedSource, { force: true });
   }
 
+  cleanupRelocatedSourceDirectories(normalizedSource);
   return targetPath;
 }
 

@@ -1,5 +1,11 @@
 import type { DebugLogInput, DebugLogLevel, RuntimeMessage } from "@aiexporter/adapter-sdk";
-import { appendDebugLog } from "./storage";
+import { appendDebugLog, appendDebugLogs } from "./storage";
+
+const BACKGROUND_LOG_BUFFER_FLUSH_MS = 400;
+const BACKGROUND_LOG_BUFFER_MAX_ENTRIES = 20;
+
+let bufferedBackgroundLogs: DebugLogInput[] = [];
+let bufferedBackgroundLogTimer: ReturnType<typeof setTimeout> | undefined;
 
 function normalizeDetails(details: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
   if (!details) return undefined;
@@ -31,13 +37,27 @@ export async function writeBackgroundLog(
   message: string,
   details?: Record<string, unknown>,
 ): Promise<void> {
-  await appendDebugLog({
+  const entry: DebugLogInput = {
     level,
     scope,
     ...pickLogMetadata(details),
     message,
     details: normalizeDetails(details),
-  });
+  };
+
+  if (level === "warn" || level === "error") {
+    await flushBufferedBackgroundLogs();
+    await appendDebugLog(entry);
+    return;
+  }
+
+  bufferedBackgroundLogs.push(entry);
+  if (bufferedBackgroundLogs.length >= BACKGROUND_LOG_BUFFER_MAX_ENTRIES) {
+    await flushBufferedBackgroundLogs("threshold");
+    return;
+  }
+
+  scheduleBufferedBackgroundLogFlush();
 }
 
 export async function writeBackgroundError(
@@ -54,6 +74,43 @@ export async function writeBackgroundError(
     ...pickLogMetadata(details),
     details: normalizeDetails(details),
   });
+}
+
+function scheduleBufferedBackgroundLogFlush(): void {
+  if (bufferedBackgroundLogTimer) {
+    return;
+  }
+
+  bufferedBackgroundLogTimer = setTimeout(() => {
+    bufferedBackgroundLogTimer = undefined;
+    void flushBufferedBackgroundLogs("timer");
+  }, BACKGROUND_LOG_BUFFER_FLUSH_MS);
+}
+
+export async function flushBufferedBackgroundLogs(reason: "timer" | "threshold" | "manual" = "manual"): Promise<void> {
+  if (bufferedBackgroundLogTimer) {
+    clearTimeout(bufferedBackgroundLogTimer);
+    bufferedBackgroundLogTimer = undefined;
+  }
+  if (bufferedBackgroundLogs.length === 0) {
+    return;
+  }
+
+  const pending = bufferedBackgroundLogs;
+  bufferedBackgroundLogs = [];
+  await appendDebugLogs([
+    ...pending,
+    {
+      level: "debug",
+      scope: "background.log-buffer",
+      message: "Flushed buffered background logs.",
+      code: "debug.log_buffer_flushed",
+      details: {
+        batchSize: pending.length,
+        reason,
+      },
+    },
+  ]);
 }
 
 export function createTraceLogger(

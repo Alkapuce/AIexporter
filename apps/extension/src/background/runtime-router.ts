@@ -2,13 +2,15 @@ import { AIEXPORTER_EXPORT_COMPATIBILITY_VERSION, type QueueState, type RuntimeM
 import type { SourcePlatform } from "@aiexporter/core-schema";
 import { clearHistoricalItems, clearItemsByStatuses, markQueueItemStatus, mergeDiscoveryEvent, removeQueueItem, retryFailedItems } from "../runtime/queue";
 import { downloadTextAsset } from "../runtime/downloads";
-import { writeBackgroundLog } from "../runtime/logger";
+import { flushBufferedBackgroundLogs, writeBackgroundLog } from "../runtime/logger";
 import { pickFolderWithNativeHost, pingNativeHost, resolveExportRootWithNativeHost, writeFileWithNativeHost } from "../runtime/native-host";
 import { loadDebugState, loadQueueState, updateConversationIndex, clearDebugState } from "../runtime/storage";
 import { markConversationIndexExportResult, upsertConversationIndexEntry } from "../runtime/indexes";
 import { openLatestArtifact, persistBundle, showLatestArtifactFolder } from "./artifact-persistence";
 import { syncArtifactsWithDisk } from "./artifact-sync";
+import { recordArtifactSyncCompleted } from "./artifact-sync-state";
 import { getConfiguredExportRoot } from "./export-root";
+import { isReceiverUnavailableError, waitForTabComplete } from "./tab-runtime";
 import {
   getQueueStateSnapshot,
   mergeSettings,
@@ -28,14 +30,16 @@ const BACKGROUND_MESSAGE_TYPES = [
   "dashboard-log-export-request",
   "debug-clear-request",
   "debug-log",
+  "manual-export-run",
   "downloads-pick-export-root",
   "downloads-resolve-export-root",
+  "downloads-resolve-default-root",
   "debug-state-request",
-  "manual-export-current",
   "platform-settings-update",
   "queue-clear-history-request",
   "queue-clear-status",
   "queue-discovery",
+  "queue-discovery-batch",
   "queue-item-cancel",
   "queue-item-force-export",
   "queue-item-remove",
@@ -103,6 +107,46 @@ function inferManualExportPlatform(sender: browser.runtime.MessageSender): Sourc
   if (url.includes("gemini.google.com")) return "gemini";
   if (url.includes("aistudio.google.com")) return "aistudio";
   return "chatgpt";
+}
+
+async function extractConversationWithReceiverRecovery(
+  serviceRuntime: BackgroundServiceRuntime,
+  deps: BackgroundRuntimeRouterDeps,
+  tabId: number,
+  timeoutMs: number,
+  platform: SourcePlatform,
+): Promise<import("@aiexporter/core-schema").ConversationBundle> {
+  try {
+    return await serviceRuntime.extractConversationFromTab(tabId, timeoutMs);
+  } catch (error) {
+    if (!isReceiverUnavailableError(error)) {
+      throw error;
+    }
+
+    await deps.writeBackgroundLog(
+      "background.manual-export",
+      "warn",
+      "Manual export receiver was unavailable, reloading the source tab before retrying once.",
+      {
+        code: "manual_export.receiver_unavailable_retry",
+        platform,
+        sourceTabId: tabId,
+        error: error instanceof Error ? error.message : String(error),
+      },
+    );
+
+    await browser.tabs.reload(tabId);
+    await waitForTabComplete(tabId, timeoutMs);
+
+    try {
+      return await serviceRuntime.extractConversationFromTab(tabId, timeoutMs);
+    } catch (retryError) {
+      if (isReceiverUnavailableError(retryError)) {
+        throw new Error("当前对话页还没有挂上最新扩展脚本。请刷新当前页面后，再点一次导出。");
+      }
+      throw retryError;
+    }
+  }
 }
 
 async function exportDebugSnapshot(deps: BackgroundRuntimeRouterDeps) {
@@ -208,6 +252,7 @@ function createRuntimeMessageHandlers(
     "artifact-sync-run": async (message) => {
       const state = await deps.loadQueueState();
       const result = await syncArtifactsWithDisk(state.settings, message.platform);
+      await recordArtifactSyncCompleted();
       if (result.requeueEvents.length > 0) {
         await deps.updateQueueStateWithDerived((current) => ({
           ...current,
@@ -235,8 +280,14 @@ function createRuntimeMessageHandlers(
         ...result,
       };
     },
-    "dashboard-log-export-request": async () => exportDebugSnapshot(deps),
-    "debug-clear-request": async () => deps.clearDebugState(),
+    "dashboard-log-export-request": async () => {
+      await flushBufferedBackgroundLogs();
+      return exportDebugSnapshot(deps);
+    },
+    "debug-clear-request": async () => {
+      await flushBufferedBackgroundLogs();
+      return deps.clearDebugState();
+    },
     "debug-log": async (message, sender) => {
       await deps.writeBackgroundLog(message.entry.scope, message.entry.level, message.entry.message, {
         ...(message.entry.details ?? {}),
@@ -244,10 +295,13 @@ function createRuntimeMessageHandlers(
       });
       return deps.loadDebugState();
     },
-    "debug-state-request": async () => deps.loadDebugState(),
-    "downloads-pick-export-root": async () => {
+    "debug-state-request": async () => {
+      await flushBufferedBackgroundLogs();
+      return deps.loadDebugState();
+    },
+    "downloads-pick-export-root": async (message) => {
       const queueState = await deps.loadQueueState();
-      const currentPath = getConfiguredExportRoot(queueState.settings);
+      const currentPath = message.currentPath?.trim() || getConfiguredExportRoot(queueState.settings);
       const response = await pickFolderWithNativeHost(currentPath);
       return {
         path: response.path,
@@ -260,19 +314,35 @@ function createRuntimeMessageHandlers(
         path: response.path,
       };
     },
-    "manual-export-current": async (message, sender) => {
-      const tabId = sender.tab?.id;
-      if (!tabId) {
-        throw new Error("Manual export requires an active conversation tab.");
-      }
-
+    "downloads-resolve-default-root": async () => {
+      const response = await resolveExportRootWithNativeHost(undefined);
+      return {
+        path: response.path,
+      };
+    },
+    "manual-export-run": async (message) => {
+      const startedAt = Date.now();
       const state = await deps.loadQueueState();
-      const platform = inferManualExportPlatform(sender);
-      const bundle = await serviceRuntime.extractConversationFromTab(
-        tabId,
+      const sourceTab = await browser.tabs.get(message.sourceTabId);
+      const platform = inferManualExportPlatform({ tab: sourceTab } as browser.runtime.MessageSender);
+      const exportRootPath = message.options.exportRootPath?.trim() || undefined;
+      const effectiveSettings = exportRootPath
+        ? {
+            ...state.settings,
+            downloads: {
+              ...state.settings.downloads,
+              exportRootPath,
+            },
+          }
+        : state.settings;
+      const bundle = await extractConversationWithReceiverRecovery(
+        serviceRuntime,
+        deps,
+        message.sourceTabId,
         state.settings.platforms[platform].navigationTimeoutMs + 15_000,
+        platform,
       );
-      const result = await deps.persistBundle(bundle, state.settings);
+      const result = await deps.persistBundle(bundle, effectiveSettings, {}, message.options);
       const persistedBundle = result.bundle;
 
       await deps.updateConversationIndex((entries) => {
@@ -308,8 +378,20 @@ function createRuntimeMessageHandlers(
       };
       await deps.recordManualExportDebug({
         request: message,
-        senderTabId: tabId,
+        senderTabId: message.sourceTabId,
         response,
+      });
+      await deps.writeBackgroundLog("background.manual-export", "info", "Completed manual export run.", {
+        code: "manual_export.completed",
+        platform,
+        sourceTabId: message.sourceTabId,
+        preset: message.options.preset,
+        includeMarkdown: message.options.includeMarkdown,
+        includeBundleJson: message.options.includeBundleJson,
+        markdownOptions: message.options.markdownOptions,
+        exportRootPath,
+        fileCount: result.files.length,
+        elapsedMs: Date.now() - startedAt,
       });
       return response;
     },
@@ -353,6 +435,27 @@ function createRuntimeMessageHandlers(
       if (state.services[message.event.platform].desiredRunning) {
         serviceRuntime.requestPlatformTick(message.event.platform);
       }
+      return state;
+    },
+    "queue-discovery-batch": async (message, sender) => {
+      const result = await serviceRuntime.queuePassiveDiscoveryEvents(message.events);
+      if (message.events.length > 0) {
+        await deps.writeBackgroundLog("background.discovery", "info", "Queued passive discovery batch.", {
+          code: "discovery.batch_queued",
+          senderTabId: sender.tab?.id,
+          batchSize: message.events.length,
+          queued: result.queued,
+          platform: message.events[0]?.platform,
+        });
+      }
+
+      const state = await deps.loadQueueState();
+      const affectedPlatforms = new Set(message.events.map((event) => event.platform));
+      affectedPlatforms.forEach((platform) => {
+        if (state.services[platform].desiredRunning) {
+          serviceRuntime.requestPlatformTick(platform);
+        }
+      });
       return state;
     },
     "queue-item-cancel": async (message) =>

@@ -1,9 +1,12 @@
 import type { RuntimeMessage } from "@aiexporter/adapter-sdk";
+import { runPeriodicSchedulerWork } from "../src/background/automatic-artifact-sync";
+import { loadArtifactSyncState } from "../src/background/artifact-sync-state";
 import { createBackgroundRuntimeRouter } from "../src/background/runtime-router";
 import { createBackgroundServiceRuntime } from "../src/background/service-runtime";
 import { ensureInitialized, recordManualExportDebug, syncDownloadUiWithSettings } from "../src/background/state-access";
 import { PERIODIC_ALARM_NAME, SUPPORTED_PLATFORMS, getPlatformAlarmName } from "../src/background/shared";
 import { writeBackgroundLog } from "../src/runtime/logger";
+import { loadQueueState } from "../src/runtime/storage";
 
 const serviceRuntime = createBackgroundServiceRuntime();
 const handleRuntimeMessage = createBackgroundRuntimeRouter(serviceRuntime);
@@ -49,8 +52,16 @@ export default defineBackground(() => {
   browser.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === PERIODIC_ALARM_NAME) {
       void writeBackgroundLog("background.lifecycle", "debug", "Periodic scheduler alarm triggered.");
-      SUPPORTED_PLATFORMS.forEach((platform) => {
-        serviceRuntime.requestPlatformTick(platform);
+      void runPeriodicSchedulerWork({
+        loadQueueState,
+        loadArtifactSyncState,
+        runArtifactSync: async () => {
+          await handleRuntimeMessage({ type: "artifact-sync-run" }, {} as browser.runtime.MessageSender);
+        },
+        requestPlatformTick: (platform) => {
+          serviceRuntime.requestPlatformTick(platform);
+        },
+        writeBackgroundLog,
       });
       return;
     }

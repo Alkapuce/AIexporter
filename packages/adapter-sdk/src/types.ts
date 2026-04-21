@@ -81,6 +81,23 @@ export interface SchedulerSettings {
 
 export type UiLocale = "zh-CN" | "en";
 export type UiThemeMode = "system" | "light" | "dark";
+export type ManualExportPreset = "complete" | "standard" | "share";
+
+export interface ManualExportMarkdownOptions {
+  includeThinking: boolean;
+  includeImages: boolean;
+  includeAttachments: boolean;
+  includeMessageTimestamps: boolean;
+}
+
+export interface ManualExportOptions {
+  preset: ManualExportPreset;
+  includeMarkdown: boolean;
+  includeBundleJson: boolean;
+  markdownOptions: ManualExportMarkdownOptions;
+  exportRootPath?: string;
+  flatOutput?: boolean;
+}
 
 export interface DownloadSettings {
   mode: "downloads-api";
@@ -95,7 +112,8 @@ export interface DownloadSettings {
 
 export type RuntimeMessage =
   | { type: "queue-discovery"; event: DiscoveryEvent }
-  | { type: "manual-export-current"; sourceId?: string; url: string }
+  | { type: "queue-discovery-batch"; events: DiscoveryEvent[] }
+  | { type: "manual-export-run"; sourceTabId: number; options: ManualExportOptions }
   | { type: "extract-current-conversation" }
   | { type: "worker-ready-ping" }
   | {
@@ -130,8 +148,9 @@ export type RuntimeMessage =
   | { type: "artifact-open-latest"; platform: SourcePlatform; sourceId: string }
   | { type: "artifact-show-folder"; platform: SourcePlatform; sourceId: string }
   | { type: "artifact-sync-run"; platform?: SourcePlatform }
-  | { type: "downloads-pick-export-root" }
+  | { type: "downloads-pick-export-root"; currentPath?: string }
   | { type: "downloads-resolve-export-root" }
+  | { type: "downloads-resolve-default-root" }
   | { type: "queue-item-force-export"; key: string }
   | { type: "debug-clear-request" }
   | { type: "dashboard-log-export-request" }

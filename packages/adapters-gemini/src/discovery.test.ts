@@ -361,4 +361,123 @@ describe("google platform discovery", () => {
     expect(bundle.messages[0]?.markdown).toContain("![photo-1.jpg](https://lh3.googleusercontent.com/gg/example-photo-1)");
     expect(bundle.messages[0]?.markdown).toContain("带图提问");
   });
+
+  it("orders Gemini RPC turns chronologically and removes inherited image attachments", () => {
+    const turns = [
+      [
+        ["c_abc123", "r_resp2"],
+        null,
+        [
+          [
+            "第二问",
+            null,
+            null,
+            null,
+            [
+              [
+                null,
+                null,
+                null,
+                [
+                  [null, 1, "photo-1.jpg", "https://lh3.googleusercontent.com/gg/example-photo-1", null, "token-1", null, null, 6],
+                  [null, 1, "photo-2.jpg", "https://lh3.googleusercontent.com/gg/example-photo-2", null, "token-2", null, null, 6],
+                ],
+              ],
+            ],
+          ],
+        ],
+        [
+          [
+            [
+              "resp-2",
+              ["第二答复"],
+            ],
+          ],
+        ],
+        [1775700200, 0],
+      ],
+      [
+        ["c_abc123", "r_resp1"],
+        null,
+        [
+          [
+            "第一问",
+            null,
+            null,
+            null,
+            [
+              [
+                null,
+                null,
+                null,
+                [
+                  [null, 1, "photo-1.jpg", "https://lh3.googleusercontent.com/gg/example-photo-1", null, "token-1", null, null, 6],
+                ],
+              ],
+            ],
+          ],
+        ],
+        [
+          [
+            [
+              "resp-1",
+              ["第一答复"],
+            ],
+          ],
+        ],
+        [1775700100, 0],
+      ],
+    ];
+    const response = `)]}'\n\n123\n${JSON.stringify([["wrb.fr", "hNvQHb", JSON.stringify([turns, null, null, []]), null, null, null]])}`;
+
+    const bundle = parseGeminiConversationFromHnvQHbResponse(
+      response,
+      "https://gemini.google.com/app/abc123",
+      "abc123",
+      "Gemini Thread",
+    );
+
+    expect(bundle.messages).toHaveLength(4);
+    expect(bundle.messages[0]?.markdown).toContain("第一问");
+    expect(bundle.messages[0]?.markdown).toContain("photo-1.jpg");
+    expect(bundle.messages[0]?.markdown).not.toContain("photo-2.jpg");
+    expect(bundle.messages[2]?.markdown).toContain("第二问");
+    expect(bundle.messages[2]?.markdown).toContain("photo-2.jpg");
+    expect(bundle.messages[2]?.markdown).not.toContain("photo-1.jpg");
+    expect(bundle.messages[3]?.markdown).toContain("第二答复");
+    expect(bundle.sourceUpdatedAt).toBe("2026-04-09T02:03:20.000Z");
+  });
+
+  it("downgrades Gemini mini-app visualization blocks into interactive links", () => {
+    const turns = [
+      [
+        ["c_demo", "r_demo"],
+        null,
+        [["解释这个磁场题"], 2, null, 1, "trace-demo", 0],
+        [
+          [
+            [
+              "resp-demo",
+              [
+                "先看这个可视化演示：\n\n```json\n{\"miniApp\":{\"spec\":\"...\",\"id\":\"im_demo123abc\"}}\n```\n\n再继续分析。",
+              ],
+            ],
+          ],
+        ],
+        [1775700300, 0],
+      ],
+    ];
+    const response = `)]}'\n\n123\n${JSON.stringify([["wrb.fr", "hNvQHb", JSON.stringify([turns, null, null, []]), null, null, null]])}`;
+
+    const bundle = parseGeminiConversationFromHnvQHbResponse(
+      response,
+      "https://gemini.google.com/app/demo-conv",
+      "demo-conv",
+      "Demo Conversation",
+    );
+
+    expect(bundle.messages[1]?.markdown).toContain("> [interactive] [Open Gemini visualization demo (im_demo123abc)](https://gemini.google.com/app/demo-conv)");
+    expect(bundle.messages[1]?.markdown).toContain("再继续分析。");
+    expect(bundle.messages[1]?.markdown).not.toContain("\"miniApp\"");
+  });
 });

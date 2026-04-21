@@ -46,6 +46,7 @@ import {
 import { ActionButton } from "./components/ActionButton";
 import { LogsTab } from "./components/LogsTab";
 import { OverviewTab } from "./components/OverviewTab";
+import { PopupQuickExportCard } from "./components/PopupQuickExportCard";
 import { QueueTab } from "./components/QueueTab";
 import { SettingsTab } from "./components/SettingsTab";
 import { useDashboardSnapshot, type DashboardMode } from "./useDashboardSnapshot";
@@ -54,7 +55,6 @@ import type { ThemeMode } from "../theme-core";
 
 type DashboardTab = "overview" | "queue" | "logs" | "settings";
 
-const popupPlatform: SourcePlatform = "deepseek";
 const dashboardPlatforms: SourcePlatform[] = ["deepseek", "gemini", "aistudio", "chatgpt"];
 const platformLabels: Record<SourcePlatform, string> = {
   deepseek: "DeepSeek",
@@ -285,7 +285,6 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
     );
   }
 
-  const popupService = queueState.services[popupPlatform];
   const selectedService = queueState.services[selectedPlatform];
   const selectedPlatformLabel = platformLabels[selectedPlatform];
   const missingLocalQueueKeys = filteredQueueItems
@@ -372,7 +371,7 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
                   border: "1px solid var(--aiexporter-border-color)",
                   borderRadius: 14,
                   padding: 12,
-                  background: platform === popupPlatform ? "var(--aiexporter-info-background)" : "var(--aiexporter-surface-muted-background)",
+                  background: "var(--aiexporter-surface-muted-background)",
                   display: "grid",
                   gap: 8,
                 }}
@@ -453,6 +452,8 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
             {t("common.refresh")}
           </ActionButton>
         </div>
+
+        <PopupQuickExportCard queueState={queueState} onRefresh={refresh} />
       </div>
     </div>
   );

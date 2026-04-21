@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { openLatestArtifact, showArtifactFolder } from "./dashboard-api";
+import { getActiveConversationTarget, openLatestArtifact, openSourceUrl, showArtifactFolder } from "./dashboard-api";
 
 describe("dashboard file actions", () => {
   afterEach(() => {
@@ -40,5 +40,40 @@ describe("dashboard file actions", () => {
     });
 
     await expect(openLatestArtifact("deepseek", "conv-3")).rejects.toThrow("runtime failed");
+  });
+
+  it("opens a normalized source url without worker flags", () => {
+    const open = vi.fn();
+    vi.stubGlobal("window", { open });
+
+    openSourceUrl("https://gemini.google.com/app/conv-1?aiexporter_worker=1&aiexporter_discovery=1&hl=zh-CN");
+
+    expect(open).toHaveBeenCalledWith(
+      "https://gemini.google.com/app/conv-1?hl=zh-CN",
+      "_blank",
+      "noopener,noreferrer",
+    );
+  });
+
+  it("recognizes the active supported conversation tab in popup mode", async () => {
+    vi.stubGlobal("browser", {
+      tabs: {
+        query: vi.fn().mockResolvedValue([
+          {
+            id: 42,
+            url: "https://aistudio.google.com/prompts/prompt-123",
+            title: "Prompt 123",
+          },
+        ]),
+      },
+    });
+
+    await expect(getActiveConversationTarget()).resolves.toEqual({
+      tabId: 42,
+      url: "https://aistudio.google.com/prompts/prompt-123",
+      title: "Prompt 123",
+      platform: "aistudio",
+      supported: true,
+    });
   });
 });

@@ -1,8 +1,8 @@
 import { buildDiscoveryFingerprint, type DebugLogLevel, type MainWorldBridgeMessage, type RuntimeMessage } from "@aiexporter/adapter-sdk";
 import { extractSessionIdFromUrl } from "@aiexporter/adapters-deepseek";
-import { isDeepSeekWorkerPageContext, unwrapRuntimeResponse } from "./browser-context";
+import { createDiscoveryBatchSender } from "../../runtime/discovery-batch";
+import { isDeepSeekWorkerPageContext } from "./browser-context";
 import { collectHistoricalPayloads, extractCurrentDeepSeekConversation } from "./history";
-import { ensureDeepSeekFloatingButton, setDeepSeekFloatingStatus, summarizeDeepSeekManualExportResult } from "./ui";
 
 declare global {
   interface Window {
@@ -113,34 +113,6 @@ async function queueCurrentConversation(log: RuntimeLogger): Promise<void> {
   });
 }
 
-async function handleManualExport(log: RuntimeLogger, button: HTMLButtonElement): Promise<void> {
-  button.disabled = true;
-  button.textContent = "Exporting...";
-  await log("info", "Manual export button clicked.", {
-    url: window.location.href,
-  });
-  try {
-    const result = unwrapRuntimeResponse(
-      await browser.runtime.sendMessage({
-        type: "manual-export-current",
-        url: window.location.href,
-      } satisfies RuntimeMessage),
-    );
-    await log("info", "Manual export completed.", {
-      result: result as Record<string, unknown>,
-    });
-    setDeepSeekFloatingStatus(summarizeDeepSeekManualExportResult(result), "success");
-  } catch (error) {
-    await log("error", "Manual export failed.", {
-      error: error instanceof Error ? error.message : "Manual export failed",
-    });
-    setDeepSeekFloatingStatus(error instanceof Error ? error.message : "Manual export failed", "error");
-  } finally {
-    button.disabled = false;
-    button.textContent = "Export Chat";
-  }
-}
-
 export async function mountDeepSeekContentRuntime(log: RuntimeLogger): Promise<void> {
   if (window.__aiexporterDeepSeekContentRuntimeInstalled) {
     await log("debug", "Skipped duplicate DeepSeek content runtime mount.", {
@@ -152,10 +124,15 @@ export async function mountDeepSeekContentRuntime(log: RuntimeLogger): Promise<v
   window.__aiexporterDeepSeekContentRuntimeInstalled = true;
 
   const discoveryPayloadBuffer = new Map<string, NonNullable<MainWorldBridgeMessage["payload"]>>();
-
-  const button = ensureDeepSeekFloatingButton();
-  button.addEventListener("click", () => {
-    void handleManualExport(log, button);
+  const batchSender = createDiscoveryBatchSender({
+    platform: "deepseek",
+    onFlush: async ({ events, reason }) => {
+      await log("debug", "DeepSeek passive discovery batch flushed.", {
+        code: "discovery.batch_flushed",
+        batchSize: events.length,
+        reason,
+      });
+    },
   });
 
   const onWindowMessage = async (event: MessageEvent<MainWorldBridgeMessage & { source?: string }>) => {
@@ -176,14 +153,11 @@ export async function mountDeepSeekContentRuntime(log: RuntimeLogger): Promise<v
     discoveryPayloadBuffer.set(payload.sourceId, payload);
 
     const revisionFingerprint = await buildDiscoveryFingerprint("deepseek", payload);
-    await browser.runtime.sendMessage({
-      type: "queue-discovery",
-      event: {
-        platform: "deepseek",
-        ...payload,
-        revisionFingerprint,
-      },
-    } satisfies RuntimeMessage);
+    await batchSender.enqueue({
+      platform: "deepseek",
+      ...payload,
+      revisionFingerprint,
+    });
 
     await log("debug", "Queued DeepSeek network discovery payload.", {
       sourceId: payload.sourceId,

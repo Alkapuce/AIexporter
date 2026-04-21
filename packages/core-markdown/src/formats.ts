@@ -1,6 +1,12 @@
 import type { ConversationBundle, Message, Participant } from "@aiexporter/core-schema";
 
 export type ConversationFormat = "full" | "user-only" | "assistant-only" | "code-only" | "compact";
+export type ConversationRenderPreset = "complete" | "standard" | "share";
+export interface ConversationRenderOptions {
+  includeThinking?: boolean;
+  includeImages?: boolean;
+  includeAttachments?: boolean;
+}
 
 const chatRoleLabels: Record<string, string> = {
   user: "User",
@@ -79,6 +85,97 @@ function convertThinkingBlocksToDetails(markdown: string): string {
   return output.join("\n");
 }
 
+function stripThinkingBlocks(markdown: string): string {
+  const lines = markdown.split(/\r?\n/);
+  const output: string[] = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? "";
+    if (!/^>\s*\[thinking\]\s*$/i.test(line.trim())) {
+      output.push(line);
+      continue;
+    }
+
+    index += 1;
+    while (index < lines.length) {
+      const candidate = lines[index] ?? "";
+      if (/^>\s?/.test(candidate) || !candidate.trim()) {
+        index += 1;
+        continue;
+      }
+      break;
+    }
+    index -= 1;
+  }
+
+  return output.join("\n");
+}
+
+function stripAttachmentBlocks(markdown: string): string {
+  return markdown.replace(/^>\s*\[attachment\].*$/gim, "");
+}
+
+function stripMarkdownImages(markdown: string): string {
+  return markdown.replace(/!\[[^\]]*]\([^)]+\)/g, "");
+}
+
+function buildRenderOptionsFromPreset(preset: ConversationRenderPreset): Required<ConversationRenderOptions> {
+  if (preset === "share") {
+    return {
+      includeThinking: false,
+      includeImages: false,
+      includeAttachments: false,
+    };
+  }
+
+  if (preset === "standard") {
+    return {
+      includeThinking: false,
+      includeImages: true,
+      includeAttachments: true,
+    };
+  }
+
+  return {
+    includeThinking: true,
+    includeImages: true,
+    includeAttachments: true,
+  };
+}
+
+function resolveRenderOptions(
+  preset: ConversationRenderPreset,
+  options?: ConversationRenderOptions,
+): Required<ConversationRenderOptions> {
+  const defaults = buildRenderOptionsFromPreset(preset);
+  return {
+    includeThinking: options?.includeThinking ?? defaults.includeThinking,
+    includeImages: options?.includeImages ?? defaults.includeImages,
+    includeAttachments: options?.includeAttachments ?? defaults.includeAttachments,
+  };
+}
+
+function applyRenderOptions(
+  markdown: string,
+  preset: ConversationRenderPreset,
+  options?: ConversationRenderOptions,
+): string {
+  const resolved = resolveRenderOptions(preset, options);
+  let next = markdown;
+
+  if (!resolved.includeThinking) {
+    next = stripThinkingBlocks(next);
+  }
+  if (!resolved.includeAttachments) {
+    next = stripAttachmentBlocks(next);
+  }
+  if (!resolved.includeImages) {
+    next = stripMarkdownImages(next);
+  }
+
+  return next;
+}
+
 function normalizeMessageSpacing(markdown: string): string {
   return markdown
     .replace(/\n{4,}/g, "\n\n\n")
@@ -154,7 +251,16 @@ function compactMarkdown(markdown: string): string {
 }
 
 function formatMessageBody(message: Message, format: ConversationFormat): string | null {
-  const body = wrapBareUrls(message.markdown.trim());
+  return formatMessageBodyWithPreset(message, format, "complete");
+}
+
+function formatMessageBodyWithPreset(
+  message: Message,
+  format: ConversationFormat,
+  preset: ConversationRenderPreset,
+  renderOptions?: ConversationRenderOptions,
+): string | null {
+  const body = wrapBareUrls(applyRenderOptions(message.markdown.trim(), preset, renderOptions));
   if (!body) return null;
 
   switch (format) {
@@ -178,12 +284,14 @@ export function formatConversationMessages(
   bundle: ConversationBundle,
   format: ConversationFormat,
   includeMessageTimestamps: boolean,
+  preset: ConversationRenderPreset = "complete",
+  renderOptions?: ConversationRenderOptions,
 ): string[] {
   const participants = buildParticipantMap(bundle.participants);
 
   return bundle.messages
     .map((message) => {
-      const body = formatMessageBody(message, format);
+      const body = formatMessageBodyWithPreset(message, format, preset, renderOptions);
       if (!body) return null;
 
       const parts = [`## ${normalizeRoleLabel(message.role, participants)}`];

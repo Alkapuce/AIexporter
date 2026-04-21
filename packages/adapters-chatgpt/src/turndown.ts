@@ -8,6 +8,15 @@ function extractLanguageClass(code: Element | null): string {
   return match?.[1] ?? "";
 }
 
+function extractKatexLatex(node: Element): string {
+  const annotation = node.querySelector("annotation[encoding='application/x-tex']");
+  if (annotation?.textContent?.trim()) {
+    return annotation.textContent.trim();
+  }
+
+  return node.textContent?.trim() ?? "";
+}
+
 export function createMarkdownConverter(): TurndownService {
   const service = new TurndownService({
     bulletListMarker: "-",
@@ -32,6 +41,31 @@ export function createMarkdownConverter(): TurndownService {
   service.addRule("preserveLineBreaks", {
     filter: "br",
     replacement: () => "  \n",
+  });
+
+  service.addRule("katexDisplay", {
+    filter: (node: TurndownNode) => {
+      if (node.nodeType !== 1) return false;
+      return (node as Element).classList.contains("katex-display");
+    },
+    replacement: (_content: string, node: TurndownNode) => {
+      const latex = extractKatexLatex(node as Element);
+      if (!latex) return "";
+      return `\n\n$$\n${latex}\n$$\n\n`;
+    },
+  });
+
+  service.addRule("katexInline", {
+    filter: (node: TurndownNode) => {
+      if (node.nodeType !== 1) return false;
+      const element = node as Element;
+      return element.classList.contains("katex") && !element.parentElement?.classList.contains("katex-display");
+    },
+    replacement: (_content: string, node: TurndownNode) => {
+      const latex = extractKatexLatex(node as Element);
+      if (!latex) return "";
+      return `$${latex}$`;
+    },
   });
 
   service.addRule("dropUiControls", {

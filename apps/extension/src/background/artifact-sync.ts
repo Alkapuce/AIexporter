@@ -147,7 +147,8 @@ export async function syncArtifactsWithDisk(
 
   for (const nextPlatform of targetPlatforms) {
     const platformRoot = `${exportRoot}\\AIexporter\\${sanitizePathSegment(nextPlatform)}`;
-    const bundlePaths = (await listFilesWithNativeHost(platformRoot, "*.bundle.json", true)).paths ?? [];
+    const platformRootExists = await fileExists(platformRoot);
+    const bundlePaths = platformRootExists ? (await listFilesWithNativeHost(platformRoot, "*.bundle.json", true)).paths ?? [] : [];
 
     for (const bundlePath of bundlePaths) {
       try {

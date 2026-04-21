@@ -1,5 +1,6 @@
 import { extractGeminiPayloadsFromBatchedResponse } from "@aiexporter/adapters-gemini";
 import type { MainWorldBridgeMessage } from "@aiexporter/adapter-sdk";
+import { buildGeminiConversationRpcPayload } from "../src/platforms/google/gemini-rpc";
 
 declare global {
   interface Window {
@@ -60,9 +61,8 @@ function buildGeminiConversationRpcUrl(sourceId: string): string {
 function buildGeminiConversationRpcBody(sourceId: string): URLSearchParams {
   const globals = getGeminiGlobalData();
   const at = typeof globals?.SNlM0e === "string" ? globals.SNlM0e : "";
-  const payload = JSON.stringify([[["hNvQHb", JSON.stringify([`c_${sourceId}`, 10, null, 1, [0], [4], null, 1]), null, "generic"]]]);
   const params = new URLSearchParams();
-  params.set("f.req", payload);
+  params.set("f.req", buildGeminiConversationRpcPayload(sourceId));
   if (at) {
     params.set("at", at);
   }
