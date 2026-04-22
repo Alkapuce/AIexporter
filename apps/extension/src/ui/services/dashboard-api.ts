@@ -165,7 +165,7 @@ export function resolveDefaultDownloadsRoot(): Promise<{ path?: string }> {
 }
 
 export function syncArtifacts(platform?: SourcePlatform): Promise<unknown> {
-  return sendMessage({ type: "artifact-sync-run", platform });
+  return sendMessage({ type: "artifact-sync-run", platform }, 120_000);
 }
 
 export function openSourceUrl(url: string): void {
