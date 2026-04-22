@@ -136,6 +136,10 @@ export function forceExportQueueItem(key: string): Promise<QueueState> {
   return sendMessage<QueueState>({ type: "queue-item-force-export", key });
 }
 
+export function discoverExportQueueItem(key: string): Promise<QueueState> {
+  return sendMessage<QueueState>({ type: "queue-item-discover-export", key }, 120_000);
+}
+
 export function clearPlatformLocalRecords(platform: SourcePlatform): Promise<QueueState> {
   return sendMessage<QueueState>({ type: "artifact-clear-platform-local", platform });
 }

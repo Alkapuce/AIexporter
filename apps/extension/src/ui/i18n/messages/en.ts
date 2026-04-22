@@ -16,6 +16,7 @@ export const enMessages = {
   "common.runDiscovery": "Run Discovery",
   "common.runFullDiscovery": "Run Full Discovery",
   "common.reExport": "Re-export",
+  "common.discoverExport": "Fetch & Export Now",
   "common.openLatestMarkdown": "Open Latest Markdown",
   "common.showExportFolder": "Show Export Folder",
   "common.languageChinese": "中文",

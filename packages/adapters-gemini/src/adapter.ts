@@ -216,18 +216,44 @@ function buildGeminiAttachmentMarkdown(attachments: GeminiRpcLinkedAttachment[])
   });
 }
 
+function extractHnvQHbPayload(responseText: string): string {
+  // batchexecute format: )]}'\n\n<size>\n<json>\n<size>\n<json>\n...
+  // Strip the leading security prefix and split into chunks by the size-prefixed lines.
+  const stripped = responseText.replace(/^\)\]\}'\n/, "");
+  const chunks = stripped.split(/\n\d+\n/).filter(Boolean);
+  for (const chunk of chunks) {
+    try {
+      const parsed = JSON.parse(chunk) as unknown;
+      if (Array.isArray(parsed) && Array.isArray(parsed[0]) && parsed[0][1] === "hNvQHb" && typeof parsed[0][2] === "string") {
+        return parsed[0][2];
+      }
+    } catch {
+      // not valid JSON, skip
+    }
+  }
+  // Fallback: try the first chunk (original behavior)
+  const firstChunk = stripped.replace(/^\d+\n/, "").split("\n")[0] ?? "[]";
+  const outer = JSON.parse(firstChunk) as unknown;
+  if (Array.isArray(outer) && Array.isArray(outer[0]) && typeof outer[0][2] === "string") {
+    return outer[0][2];
+  }
+  throw new Error("Gemini hNvQHb response did not contain a parsable payload.");
+}
+
 export function parseGeminiConversationFromHnvQHbResponse(
   responseText: string,
   url: string,
   sourceId: string,
   title?: string,
 ): ConversationBundle {
-  const outer = JSON.parse(responseText.replace(/^\)\]\}'\n\n\d+\n/, "").split("\n")[0] ?? "[]") as unknown;
-  if (!Array.isArray(outer) || !Array.isArray(outer[0]) || typeof outer[0][2] !== "string") {
+  let innerPayload: string;
+  try {
+    innerPayload = extractHnvQHbPayload(responseText);
+  } catch {
     throw new Error("Gemini hNvQHb response did not contain a parsable payload.");
   }
 
-  const inner = JSON.parse(outer[0][2]) as unknown;
+  const inner = JSON.parse(innerPayload) as unknown;
   const turnEntries = Array.isArray(inner) && Array.isArray(inner[0]) ? inner[0] : [];
   const orderedTurnEntries = turnEntries
     .map((entry, index) => ({

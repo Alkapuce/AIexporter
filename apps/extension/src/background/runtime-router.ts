@@ -41,6 +41,7 @@ const BACKGROUND_MESSAGE_TYPES = [
   "queue-discovery",
   "queue-discovery-batch",
   "queue-item-cancel",
+  "queue-item-discover-export",
   "queue-item-force-export",
   "queue-item-remove",
   "queue-item-retry",
@@ -239,6 +240,63 @@ async function findQueueItemPlatform(
 ): Promise<SourcePlatform> {
   const current = await loadCurrentState();
   return current.items.find((item) => item.key === key)?.platform ?? "deepseek";
+}
+
+async function discoverAndExportItem(
+  serviceRuntime: BackgroundServiceRuntime,
+  deps: BackgroundRuntimeRouterDeps,
+  key: string,
+): Promise<QueueState> {
+  const state = await deps.loadQueueState();
+  const item = state.items.find((i) => i.key === key);
+  if (!item) {
+    throw new Error(`Queue item not found: ${key}`);
+  }
+
+  const workerUrl = new URL(item.event.url);
+  workerUrl.searchParams.set("aiexporter_worker", "1");
+  const tab = await browser.tabs.create({ url: workerUrl.toString(), active: false, pinned: true });
+  const tabId = tab.id!;
+
+  try {
+    await waitForTabComplete(tabId, state.settings.platforms[item.platform].navigationTimeoutMs + 15_000);
+    const bundle = await extractConversationWithReceiverRecovery(
+      serviceRuntime,
+      deps,
+      tabId,
+      state.settings.platforms[item.platform].navigationTimeoutMs + 15_000,
+      item.platform,
+    );
+    const result = await deps.persistBundle(bundle, state.settings, {});
+    const persistedBundle = result.bundle;
+
+    await deps.updateConversationIndex((entries) => {
+      let next = upsertConversationIndexEntry(
+        entries,
+        {
+          platform: persistedBundle.platform,
+          sourceId: persistedBundle.sourceId,
+          url: persistedBundle.url,
+          title: persistedBundle.title,
+          sourceUpdatedAt: persistedBundle.sourceUpdatedAt,
+          revisionFingerprint: result.revision,
+        },
+        "partial",
+      );
+      next = markConversationIndexExportResult(
+        next,
+        persistedBundle,
+        result.revision,
+        "exported",
+        AIEXPORTER_EXPORT_COMPATIBILITY_VERSION,
+      );
+      return next;
+    });
+    await deps.refreshQueueServices();
+    return deps.getQueueStateSnapshot();
+  } finally {
+    await browser.tabs.remove(tabId).catch(() => undefined);
+  }
 }
 
 function createRuntimeMessageHandlers(
@@ -483,6 +541,9 @@ function createRuntimeMessageHandlers(
       }));
       serviceRuntime.requestPlatformTick(await findQueueItemPlatform(deps.loadQueueState, message.key));
       return next;
+    },
+    "queue-item-discover-export": async (message) => {
+      return discoverAndExportItem(serviceRuntime, deps, message.key);
     },
     "queue-item-remove": async (message) =>
       deps.updateQueueStateWithDerived((current) => ({

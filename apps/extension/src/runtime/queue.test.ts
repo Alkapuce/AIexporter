@@ -153,4 +153,42 @@ describe("queue helpers", () => {
     expect(merged[0]?.status).toBe("pending");
     expect(merged[1]?.status).toBe("completed");
   });
+
+  it("merges into a failed item instead of creating a duplicate", () => {
+    const items = [
+      {
+        key: "gemini:conv-1:",
+        event: {
+          platform: "gemini" as const,
+          sourceId: "conv-1",
+          url: "https://gemini.google.com/app/conv-1",
+          revisionFingerprint: "",
+        },
+        kind: "export" as const,
+        priority: "realtime" as const,
+        platform: "gemini" as const,
+        status: "failed" as const,
+        attempts: 1,
+        lastError: "Worker receiver did not become ready before timeout.",
+        discoveredAt: "2026-04-22T06:04:45.000Z",
+        updatedAt: "2026-04-22T06:05:40.000Z",
+      },
+    ];
+
+    const merged = mergeDiscoveryEvent(
+      items,
+      {
+        platform: "gemini",
+        sourceId: "conv-1",
+        url: "https://gemini.google.com/app/conv-1",
+        revisionFingerprint: "",
+      },
+      { kind: "export", priority: "realtime" },
+      "2026-04-22T06:06:11.000Z",
+    );
+
+    expect(merged).toHaveLength(1);
+    expect(merged[0]?.status).toBe("pending");
+    expect(merged[0]?.lastError).toBeUndefined();
+  });
 });

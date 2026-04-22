@@ -16,6 +16,7 @@ export const zhCNMessages = {
   "common.runDiscovery": "立即发现",
   "common.runFullDiscovery": "完整发现",
   "common.reExport": "重新导出",
+  "common.discoverExport": "立即抓取并导出",
   "common.openLatestMarkdown": "打开最新 Markdown",
   "common.showExportFolder": "显示导出目录",
   "common.languageChinese": "中文",

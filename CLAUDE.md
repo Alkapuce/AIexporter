@@ -21,6 +21,7 @@ corepack pnpm test             # Run all Vitest suites
 corepack pnpm build            # Build all packages and apps
 corepack pnpm dev:server       # Start Fastify server (http://127.0.0.1:8787)
 corepack pnpm dev:ext          # Run WXT extension in dev mode
+corepack pnpm --filter @aiexporter/extension register:native-host  # Register Windows native host
 ```
 
 Run a specific package's tests:
@@ -38,13 +39,17 @@ corepack pnpm --filter @aiexporter/server test
 5. Extension serializes normalized bundle into Markdown and bundle JSON.
 6. Artifacts stored via browser Downloads API; optionally POSTed to local Fastify service.
 
-### Background layering (after refactor)
+### Background layering
 - `entrypoints/background.ts` - wires listeners and bootstraps services.
-- `src/background/runtime-router.ts` - runtime message routing.
-- `src/background/service-runtime.ts` - queue orchestration, worker scheduling, platform ticks.
-- `src/background/tab-runtime.ts` - content-script messaging, worker-tab readiness.
-- `src/background/artifact-persistence.ts` - artifact writes, pruning, native-host file actions.
-- `src/background/state-access.ts` - queue-state normalization.
+- `src/background/runtime-router.ts` - runtime message routing between background, content scripts, and dashboard.
+- `src/background/service-runtime.ts` - queue orchestration, worker scheduling, platform ticks, challenge detection.
+- `src/background/tab-runtime.ts` - worker-tab lifecycle, content-script readiness.
+- `src/background/artifact-persistence.ts` - artifact writes, pruning, export-root resolution.
+- `src/background/artifact-sync.ts` - artifact verification and re-import from disk.
+- `src/background/artifact-sync-state.ts` - sync state tracking.
+- `src/background/automatic-artifact-sync.ts` - scheduled background sync logic.
+- `src/background/export-root.ts` - configurable export directory support.
+- `src/background/state-access.ts` - queue-state normalization and derived updates.
 - `src/background/shared.ts` - shared constants, archive naming.
 
 ### Platform adapters
@@ -55,9 +60,23 @@ Each platform (ChatGPT, DeepSeek, Gemini, AI Studio) has:
 
 ### Native host (Windows)
 - Located in `apps/extension/native-host/` (host.cjs, manifest.json).
-- Used for "open file" and "reveal in Explorer" from dashboard.
-- Falls back to browser-level download actions if unavailable.
+- Capabilities: custom export directory picker, open file, reveal in Explorer, move to Recycle Bin, resolve OneDrive-redirected Downloads paths.
+- Falls back to browser Downloads API when unavailable.
 - Registration script: `apps/extension/scripts/register-native-host.ps1`.
+
+### Archive format
+Exports follow a consistent directory structure:
+```
+<export-root>/AIexporter/<platform>/<conversation-folder>/<revision>/
+  <artifact>.md
+  <artifact>.bundle.json
+```
+
+### Dashboard
+The extension dashboard provides:
+- Queue tab — view pending, processing, completed, and failed items per platform.
+- Logs tab — real-time background debug logs.
+- Settings tab — configure export root, discovery intervals, platform-specific tuning, locale (en/zh-CN).
 
 ## Testing
 - Vitest is the test runner. Tests are co-located with source (`*.test.ts`) or in a `test/` directory.

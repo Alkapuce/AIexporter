@@ -32,6 +32,7 @@ interface QueueTabProps {
   onCancelItem: (key: string) => void;
   onRemoveItem: (key: string) => void;
   onForceExport: (key: string) => void;
+  onDiscoverExport: (key: string) => void;
   onOpenLatest: (sourceId: string) => void;
   onShowFolder: (sourceId: string) => void;
   page: number;
@@ -105,6 +106,7 @@ export function QueueTab({
   onCancelItem,
   onRemoveItem,
   onForceExport,
+  onDiscoverExport,
   onOpenLatest,
   onShowFolder,
   page,
@@ -286,6 +288,13 @@ export function QueueTab({
                     onClick={() => onForceExport(item.key)}
                   >
                     {t("common.reExport")}
+                  </ActionButton>
+                  <ActionButton
+                    disabled={busy || item.status === "processing"}
+                    style={{ background: "var(--aiexporter-button-accent-background)" }}
+                    onClick={() => onDiscoverExport(item.key)}
+                  >
+                    {t("common.discoverExport")}
                   </ActionButton>
                   <ActionButton
                     disabled={busy || item.status !== "failed"}

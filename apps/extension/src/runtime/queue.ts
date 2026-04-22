@@ -17,30 +17,40 @@ export function mergeDiscoveryEvent(
   const nextPriority = options.priority ?? "realtime";
 
   if (existing) {
-    return items.map((item) =>
-      item.key === key
-        ? {
-            ...item,
-            event: {
-              ...item.event,
-              ...event,
-            },
-            platform: event.platform,
-            kind: nextKind,
-            priority: options.forcePending ? nextPriority : item.priority,
-            status: options.forcePending && item.status !== "processing" ? "pending" : item.status,
-            workerId: options.forcePending ? undefined : item.workerId,
-            lastError: options.forcePending ? undefined : item.lastError,
-            updatedAt: now,
-          }
-        : item,
-    );
+    return items.map((item) => {
+      if (item.key !== key) return item;
+      const shouldResetStatus =
+        (options.forcePending && item.status !== "processing") ||
+        item.status === "failed" ||
+        item.status === "cancelled" ||
+        item.status === "skipped";
+      return {
+        ...item,
+        event: {
+          ...item.event,
+          ...event,
+        },
+        platform: event.platform,
+        kind: nextKind,
+        priority: shouldResetStatus ? nextPriority : item.priority,
+        status: shouldResetStatus ? "pending" : item.status,
+        workerId: shouldResetStatus ? undefined : item.workerId,
+        lastError: shouldResetStatus ? undefined : item.lastError,
+        updatedAt: now,
+      };
+    });
   }
 
   const existingBySource = items.find((item) => item.event.platform === event.platform && item.event.sourceId === event.sourceId);
+  const existingBySourceIsActive =
+    existingBySource?.status === "pending" ||
+    existingBySource?.status === "processing" ||
+    existingBySource?.status === "failed" ||
+    existingBySource?.status === "cancelled" ||
+    existingBySource?.status === "skipped";
   if (
     existingBySource &&
-    (existingBySource.status === "pending" || existingBySource.status === "processing") &&
+    existingBySourceIsActive &&
     (!existingBySource.event.sourceUpdatedAt || !event.sourceUpdatedAt)
   ) {
     const mergedEvent: DiscoveryEvent = {
@@ -55,22 +65,26 @@ export function mergeDiscoveryEvent(
           : existingBySource.event.revisionFingerprint,
     };
 
-    return items.map((item) =>
-        item.key === existingBySource.key
-          ? {
-            ...item,
-            key: getQueueItemKey(mergedEvent),
-            event: mergedEvent,
-            platform: mergedEvent.platform,
-            kind: nextKind,
-            priority: options.forcePending && item.status !== "processing" ? nextPriority : item.priority,
-            status: options.forcePending && item.status !== "processing" ? "pending" : item.status,
-            workerId: options.forcePending ? undefined : item.workerId,
-            lastError: options.forcePending ? undefined : item.lastError,
-            updatedAt: now,
-          }
-        : item,
-    );
+    return items.map((item) => {
+      if (item.key !== existingBySource.key) return item;
+      const shouldResetStatus =
+        (options.forcePending && item.status !== "processing") ||
+        item.status === "failed" ||
+        item.status === "cancelled" ||
+        item.status === "skipped";
+      return {
+        ...item,
+        key: getQueueItemKey(mergedEvent),
+        event: mergedEvent,
+        platform: mergedEvent.platform,
+        kind: nextKind,
+        priority: shouldResetStatus ? nextPriority : item.priority,
+        status: shouldResetStatus ? "pending" : item.status,
+        workerId: shouldResetStatus ? undefined : item.workerId,
+        lastError: shouldResetStatus ? undefined : item.lastError,
+        updatedAt: now,
+      };
+    });
   }
 
   return [

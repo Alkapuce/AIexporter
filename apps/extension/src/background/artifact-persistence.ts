@@ -366,14 +366,13 @@ export function resolvePreferredConversationTitle(
     .find((title): title is string => Boolean(title));
   const promptFallbackTitle = extractFirstUserPromptTitle(bundle);
 
-  if (
-    normalizedIndexedTitle &&
-    queueTitle &&
-    promptFallbackTitle &&
-    queueTitle === promptFallbackTitle &&
-    normalizedIndexedTitle !== queueTitle
-  ) {
-    return normalizedIndexedTitle;
+  // If the queue item's title is just the first user prompt (no real title was discovered),
+  // prefer the indexed title which may have been captured from a better discovery pass.
+  const queueTitleIsPromptFallback =
+    Boolean(queueTitle) && Boolean(promptFallbackTitle) && queueTitle === promptFallbackTitle;
+
+  if (queueTitleIsPromptFallback) {
+    return normalizedIndexedTitle ?? queueTitle;
   }
 
   return queueTitle ?? normalizedIndexedTitle;
@@ -562,6 +561,9 @@ export async function openLatestArtifact(platform: ExportArtifactEntry["platform
     await pingNativeHost();
     await openFileWithNativeHost(filename);
   } catch {
+    if (typeof (artifact.markdownDownloadId ?? artifact.bundleDownloadId) !== "number") {
+      throw new Error(`文件由本地服务写入，需要 native host 才能打开。请确认 native host 已注册并运行。文件路径：${filename}`);
+    }
     await openDownloadedAsset(artifact.markdownDownloadId ?? artifact.bundleDownloadId);
   }
 
@@ -588,6 +590,9 @@ export async function showLatestArtifactFolder(
     await pingNativeHost();
     await showFolderWithNativeHost(filename);
   } catch {
+    if (typeof (artifact.markdownDownloadId ?? artifact.bundleDownloadId) !== "number") {
+      throw new Error(`文件由本地服务写入，需要 native host 才能显示目录。请确认 native host 已注册并运行。文件路径：${filename}`);
+    }
     await showDownloadedAsset(artifact.markdownDownloadId ?? artifact.bundleDownloadId);
   }
 
@@ -751,6 +756,11 @@ export async function persistBundle(
   );
   const preferredTitle = resolvePreferredConversationTitle(bundle, indexedConversation?.title, queueState);
   const resolvedLiveTitle = resolveBundleTitle(bundle, preferredTitle);
+  if (resolvedLiveTitle.usedFallback) {
+    throw new Error(
+      `无法解析对话标题，文件名将退化为用户首句（"${resolvedLiveTitle.title}"）。请等待 Gemini 生成摘要标题后重试。`,
+    );
+  }
   const bundleForPersistence =
     resolvedLiveTitle.title === bundle.title
       ? bundle
@@ -922,7 +932,18 @@ export async function persistBundle(
         : persistBinaryArtifact(asset.relativePath, asset.contentBase64 ?? "", asset.mimeType, effectiveSettings),
     ),
   );
-  await syncBundleToServer(prepared.bundle, effectiveSettings, manifestVersion);
+  try {
+    await syncBundleToServer(prepared.bundle, effectiveSettings, manifestVersion);
+  } catch (error) {
+    await writeBackgroundLog("background.persist", "warn", "Server sync failed, continuing with local persistence.", {
+      code: "artifact.server_sync_failed",
+      platform: bundle.platform,
+      sourceId: traceContext.sourceId ?? bundle.sourceId,
+      workerId: traceContext.workerId,
+      traceId: traceContext.traceId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 
   let artifactEntry: ExportArtifactEntry = {
     platform: bundle.platform,

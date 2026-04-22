@@ -7,6 +7,7 @@ import {
   clearLogs,
   clearPlatformLocalRecords,
   clearQueueStatuses,
+  discoverExportQueueItem,
   exportLogs,
   forceExportQueueItem,
   openDashboard,
@@ -568,6 +569,7 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
             onCancelItem={(key) => void runAction(() => cancelQueueItem(key))}
             onRemoveItem={(key) => void runAction(() => removeQueueItem(key))}
             onForceExport={(key) => void runAction(() => forceExportQueueItem(key))}
+            onDiscoverExport={(key) => void runAction(() => discoverExportQueueItem(key))}
             onOpenLatest={handleOpenLatest}
             onShowFolder={handleShowFolder}
             page={queuePage}

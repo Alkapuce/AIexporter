@@ -152,6 +152,7 @@ export type RuntimeMessage =
   | { type: "downloads-resolve-export-root" }
   | { type: "downloads-resolve-default-root" }
   | { type: "queue-item-force-export"; key: string }
+  | { type: "queue-item-discover-export"; key: string }
   | { type: "debug-clear-request" }
   | { type: "dashboard-log-export-request" }
   | { type: "settings-get" }
