@@ -1,11 +1,10 @@
 import type { BridgeNetworkPayload, DebugLogLevel, MainWorldBridgeMessage } from "@aiexporter/adapter-sdk";
 import {
-  deepseekAdapter,
-  extractConversationFromDom,
   extractDiscoveryPayloadsFromDocument,
   extractSessionIdFromUrl,
   parseHistoryResponse,
   summarizeHistoryPage,
+  type DeepSeekFileAttachment,
   type DeepSeekHistoryResponse,
 } from "@aiexporter/adapters-deepseek";
 import { normalizeConversationUrl } from "@aiexporter/core-schema";
@@ -24,67 +23,7 @@ const SIDEBAR_SCROLL_STEP_RATIO = 0.72;
 const SIDEBAR_SCROLL_SETTLE_MS = 1_100;
 const SIDEBAR_SCROLL_MAX_STEPS = 220;
 const PAGE_WORLD_FETCH_TIMEOUT_MS = 15_000;
-const CONVERSATION_READY_TIMEOUT_MS = 12_000;
-const CONVERSATION_POLL_MS = 300;
-const MESSAGE_SCROLL_STEP_RATIO = 0.9;
-const MESSAGE_SCROLL_SETTLE_MS = 500;
-const MESSAGE_SCROLL_MAX_STEPS = 60;
-const MESSAGE_SCROLL_STABLE_ROUNDS = 2;
 const DISCOVERY_API_PAGE_LIMIT = 10;
-
-function extractAttachmentBlocks(markdown: string): string[] {
-  return markdown
-    .split(/\n{2,}/)
-    .map((block) => block.trim())
-    .filter((block) => /^>\s*\[attachment\]/i.test(block));
-}
-
-function collectAttachmentBlocksFromDocument(documentRef: Document): string[] {
-  const blocks: string[] = [];
-  const seen = new Set<string>();
-  documentRef.querySelectorAll<HTMLElement>(".f3a54b52").forEach((nameNode) => {
-    const name = nameNode.textContent?.trim();
-    if (!name || !/\.(pdf|png|jpe?g|gif|webp|bmp|svg|docx?|pptx?|xlsx?|csv|tsv|md|txt)$/i.test(name)) {
-      return;
-    }
-    const card = nameNode.closest<HTMLElement>("._76cd190, ._5cadb25, [tabindex='0']");
-    const meta = card?.querySelector<HTMLElement>("._5119742, .dc832104")?.textContent?.trim();
-    const block = `> [attachment] ${name}${meta ? ` (${meta})` : ""}`;
-    if (seen.has(block)) return;
-    seen.add(block);
-    blocks.push(block);
-  });
-  return blocks;
-}
-
-function mergeApiBundleWithDomAttachments(
-  apiBundle: Awaited<ReturnType<typeof parseHistoryResponse>>,
-  documentRef: Document,
-) {
-  const documentAttachmentBlocks = collectAttachmentBlocksFromDocument(documentRef);
-  const mergedMessages = apiBundle.messages.map((message, index) => {
-    const domAttachmentBlocks =
-      index === 0 && message.role === "user"
-        ? documentAttachmentBlocks
-        : extractAttachmentBlocks(message.markdown);
-    if (domAttachmentBlocks.length === 0 || /\[attachment\]/i.test(message.markdown)) {
-      return message;
-    }
-    return {
-      ...message,
-      markdown: `${domAttachmentBlocks.join("\n\n")}\n\n${message.markdown}`.trim(),
-    };
-  });
-
-  return {
-    ...apiBundle,
-    messages: mergedMessages,
-    meta: {
-      ...(apiBundle.meta ?? {}),
-      source: "api+dom-attachments",
-    },
-  };
-}
 
 export type HistoricalDiscoverySource = "api" | "sidebar" | "merged" | "buffered" | "empty";
 
@@ -167,77 +106,6 @@ export function resolveHistoricalPayloads({
   };
 }
 
-function getConversationScrollContainer(documentRef: Document): HTMLElement | null {
-  const candidates = [
-    documentRef.querySelector<HTMLElement>("main"),
-    ...Array.from(documentRef.querySelectorAll<HTMLElement>("main *")),
-  ];
-
-  for (const candidate of candidates) {
-    if (!candidate) continue;
-    const style = window.getComputedStyle(candidate);
-    if (
-      candidate.scrollHeight > candidate.clientHeight + 300 &&
-      (style.overflowY === "auto" || style.overflowY === "scroll")
-    ) {
-      return candidate;
-    }
-  }
-
-  return null;
-}
-
-async function waitForConversationViewportReady(documentRef: Document, locationRef: Location): Promise<void> {
-  const startedAt = Date.now();
-  while (Date.now() - startedAt < CONVERSATION_READY_TIMEOUT_MS) {
-    const sourceId = extractSessionIdFromUrl(locationRef.href);
-    const domConversation = extractConversationFromDom(documentRef);
-    if (sourceId && domConversation.messages.length > 0) {
-      return;
-    }
-    await new Promise((resolve) => window.setTimeout(resolve, CONVERSATION_POLL_MS));
-  }
-}
-
-async function hydrateConversationDomIfNeeded(
-  documentRef: Document,
-  locationRef: Location,
-  log: RuntimeLogger,
-): Promise<void> {
-  const container = getConversationScrollContainer(documentRef);
-  if (!container) {
-    await log("warn", "Unable to locate DeepSeek conversation scroll container for DOM hydration.", {
-      code: "extract.dom_scroll_container_missing",
-      url: locationRef.href,
-    });
-    return;
-  }
-
-  let stableRounds = 0;
-  let lastCount = extractConversationFromDom(documentRef).messages.length;
-
-  for (let step = 0; step < MESSAGE_SCROLL_MAX_STEPS; step += 1) {
-    const nextScrollTop = Math.max(0, container.scrollTop - container.clientHeight * MESSAGE_SCROLL_STEP_RATIO);
-    if (nextScrollTop !== container.scrollTop) {
-      container.scrollTop = nextScrollTop;
-      await new Promise((resolve) => window.setTimeout(resolve, MESSAGE_SCROLL_SETTLE_MS));
-    }
-
-    const currentCount = extractConversationFromDom(documentRef).messages.length;
-    stableRounds = currentCount === lastCount ? stableRounds + 1 : 0;
-    lastCount = currentCount;
-    if (container.scrollTop <= 4 && stableRounds >= MESSAGE_SCROLL_STABLE_ROUNDS) {
-      break;
-    }
-  }
-
-  await log("debug", "Hydrated DeepSeek conversation DOM before fallback extraction.", {
-    code: "extract.dom_hydrated",
-    url: locationRef.href,
-    messageCount: extractConversationFromDom(documentRef).messages.length,
-  });
-}
-
 export async function fetchDeepSeekConversationViaPageWorld(
   sourceId: string,
   log: RuntimeLogger,
@@ -273,7 +141,11 @@ export async function fetchDeepSeekConversationViaPageWorld(
         return;
       }
 
-      resolve(event.data.response.data as DeepSeekHistoryResponse);
+      try {
+        resolve(JSON.parse(event.data.response.text as string) as DeepSeekHistoryResponse);
+      } catch {
+        reject(new Error("DeepSeek page-world bridge returned unparseable JSON."));
+      }
     };
 
     window.addEventListener("message", listener);
@@ -296,6 +168,104 @@ export async function fetchDeepSeekConversationViaPageWorld(
   });
 }
 
+const FILE_PREVIEW_TIMEOUT_MS = 8_000;
+
+async function resolveFilePreviewUrl(
+  fileId: string,
+  sessionId: string,
+  messageId: string,
+  locationRef: Location,
+): Promise<string | null> {
+  const requestId = crypto.randomUUID();
+  return new Promise<string | null>((resolve) => {
+    const timeout = window.setTimeout(() => {
+      window.removeEventListener("message", listener);
+      resolve(null);
+    }, FILE_PREVIEW_TIMEOUT_MS);
+
+    const listener = (event: MessageEvent) => {
+      if (event.source !== window) return;
+      if (event.data?.source !== "aiexporter" || event.data?.type !== "deepseek-page-file-preview-response") return;
+      if (event.data.requestId !== requestId || event.data.fileId !== fileId) return;
+
+      window.clearTimeout(timeout);
+      window.removeEventListener("message", listener);
+
+      if (!event.data.response?.ok) {
+        resolve(null);
+        return;
+      }
+
+      try {
+        const parsed = JSON.parse(event.data.response.text as string) as { data?: { url?: string } };
+        resolve(parsed.data?.url ?? null);
+      } catch {
+        resolve(null);
+      }
+    };
+
+    window.addEventListener("message", listener);
+    window.postMessage(
+      {
+        source: "aiexporter",
+        type: "aiexporter.deepseek.fetch-file-preview",
+        requestId,
+        fileId,
+        sessionId,
+        messageId,
+      },
+      locationRef.origin,
+    );
+  });
+}
+
+async function resolveFilePreviewUrls(
+  payload: DeepSeekHistoryResponse,
+  sessionId: string,
+  locationRef: Location,
+  log: RuntimeLogger,
+): Promise<DeepSeekHistoryResponse> {
+  const messages = payload.data?.biz_data?.chat_messages;
+  if (!messages) return payload;
+
+  const updatedMessages = await Promise.all(
+    messages.map(async (message) => {
+      if (!message.files?.length) return message;
+      const messageId = String(message.message_id ?? "");
+      const updatedFiles = await Promise.all(
+        message.files.map(async (file: DeepSeekFileAttachment) => {
+          if (!file.id || file.status === "FAILED" || file.error_code != null) return file;
+          const url = await resolveFilePreviewUrl(file.id, sessionId, messageId, locationRef);
+          return url ? { ...file, download_url: url } : file;
+        }),
+      );
+      return { ...message, files: updatedFiles };
+    }),
+  );
+
+  const resolvedCount = updatedMessages.reduce(
+    (count, message) => count + (message.files?.filter((f) => f.download_url).length ?? 0),
+    0,
+  );
+
+  await log("info", "Resolved DeepSeek file preview URLs.", {
+    code: "extract.file_preview_resolved",
+    resolvedCount,
+    sessionId,
+  });
+
+  return {
+    ...payload,
+    data: {
+      ...payload.data,
+      biz_data: {
+        ...payload.data?.biz_data,
+        chat_messages: updatedMessages,
+      },
+    },
+  };
+}
+
 export async function extractCurrentDeepSeekConversation(log: RuntimeLogger) {
   const normalizedUrl = normalizeConversationUrl(window.location.href);
   const sourceId = extractSessionIdFromUrl(normalizedUrl);
@@ -303,44 +273,11 @@ export async function extractCurrentDeepSeekConversation(log: RuntimeLogger) {
     throw new Error("Current page is not a DeepSeek conversation URL.");
   }
 
-  try {
-    const payload = await fetchDeepSeekConversationViaPageWorld(sourceId, log);
-    let bundle = parseHistoryResponse(payload, normalizedUrl, sourceId);
-    await waitForConversationViewportReady(document, location);
-    await hydrateConversationDomIfNeeded(document, location, log);
-    if (collectAttachmentBlocksFromDocument(document).length > 0) {
-      bundle = mergeApiBundleWithDomAttachments(bundle, document);
-      await log("info", "Merged DeepSeek DOM attachment cards with page-world API conversation.", {
-        code: "extract.page_world_dom_attachment_merge",
-        sourceId,
-        messageCount: bundle.messages.length,
-      });
-    }
-    await log("info", "Extracted current DeepSeek conversation via page-world API.", {
-      code: "extract.page_world_success",
-      sourceId,
-      messageCount: bundle.messages.length,
-      url: window.location.href,
-    });
-    return bundle;
-  } catch (error) {
-    await log("warn", "DeepSeek page-world API extraction failed, falling back to DOM.", {
-      code: "extract.api_failed",
-      sourceId,
-      url: window.location.href,
-      error: error instanceof Error ? error.message : "DeepSeek page-world API extraction failed",
-    });
-  }
-
-  await waitForConversationViewportReady(document, location);
-  await hydrateConversationDomIfNeeded(document, location, log);
-  const bundle = await deepseekAdapter.extractCurrentConversation({
-    document,
-    window,
-    location,
-  });
-  await log("warn", "Extracted current DeepSeek conversation via DOM fallback.", {
-    code: "extract.dom_fallback_used",
+  const rawPayload = await fetchDeepSeekConversationViaPageWorld(sourceId, log);
+  const payload = await resolveFilePreviewUrls(rawPayload, sourceId, window.location, log);
+  const bundle = parseHistoryResponse(payload, normalizedUrl, sourceId);
+  await log("info", "Extracted current DeepSeek conversation via page-world API.", {
+    code: "extract.page_world_success",
     sourceId,
     messageCount: bundle.messages.length,
     url: window.location.href,
@@ -429,7 +366,7 @@ async function waitForDiscoverySidebarReady(
     if (container && hrefCount > 0) {
       return { container, hrefCount };
     }
-    if (!sidebarToggleAttempted && hrefCount === 0) {
+    if (!sidebarToggleAttempted && !container) {
       sidebarToggleAttempted = true;
       await ensureDeepSeekSidebarVisible(documentRef, log);
     }

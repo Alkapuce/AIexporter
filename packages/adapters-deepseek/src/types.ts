@@ -18,6 +18,17 @@ export interface DeepSeekHistoryResponse {
   msg?: string;
 }
 
+export interface DeepSeekFileAttachment {
+  id?: string;
+  file_name?: string;
+  file_size?: number;
+  previewable?: boolean;
+  status?: string;
+  error_code?: string | null;
+  /** Resolved temporary download URL (injected by content script before parsing). */
+  download_url?: string;
+}
+
 export interface DeepSeekMessage {
   message_id?: number | string;
   parent_id?: number | string;
@@ -25,6 +36,7 @@ export interface DeepSeekMessage {
   content?: string;
   thinking_content?: string;
   inserted_at?: string | number;
+  files?: DeepSeekFileAttachment[];
   fragments?: Array<{
     id?: number | string;
     type?: string;

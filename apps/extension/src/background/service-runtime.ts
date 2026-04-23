@@ -674,6 +674,8 @@ export function createBackgroundServiceRuntime(): BackgroundServiceRuntime {
         await patchPlatformService(platform, {
           activeDiscoveryTabs: Math.max(0, latestState.services[platform].activeDiscoveryTabs - 1),
         });
+        // Kick the tick so workers can start now that discovery is done.
+        requestPlatformTick(platform);
       }
     }
     })().finally(() => {

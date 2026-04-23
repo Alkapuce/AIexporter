@@ -79,6 +79,7 @@ export const DEFAULT_EXTENSION_SETTINGS: ExtensionSettings = {
       reuseWorkerTabs: true,
       bootstrapWindowMode: "background_tab",
       discoveryReadyTimeoutMs: 45_000,
+      receiverReadyTimeoutMs: 15_000,
     }),
     deepseek: createDefaultPlatformRuntimeConfig({
       enabled: true,

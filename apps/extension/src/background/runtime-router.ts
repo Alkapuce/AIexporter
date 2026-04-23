@@ -1,6 +1,6 @@
 import { AIEXPORTER_EXPORT_COMPATIBILITY_VERSION, type QueueState, type RuntimeMessage } from "@aiexporter/adapter-sdk";
 import type { SourcePlatform } from "@aiexporter/core-schema";
-import { clearHistoricalItems, clearItemsByStatuses, markQueueItemStatus, mergeDiscoveryEvent, removeQueueItem, retryFailedItems } from "../runtime/queue";
+import { clearHistoricalItems, clearItemsByStatuses, markQueueItemStatus, mergeDiscoveryEvent, patchQueueItem, removeQueueItem, retryFailedItems } from "../runtime/queue";
 import { downloadTextAsset } from "../runtime/downloads";
 import { flushBufferedBackgroundLogs, writeBackgroundLog } from "../runtime/logger";
 import { pickFolderWithNativeHost, pingNativeHost, resolveExportRootWithNativeHost, writeFileWithNativeHost } from "../runtime/native-host";
@@ -259,6 +259,17 @@ async function discoverAndExportItem(
   const tabId = tab.id!;
 
   try {
+    await deps.updateQueueStateWithDerived((current) => ({
+      ...current,
+      items: patchQueueItem(current.items, key, {
+        status: "processing",
+        lastError: undefined,
+        errorCode: undefined,
+        skipReason: undefined,
+        workerId: undefined,
+      }),
+    }));
+
     await waitForTabComplete(tabId, state.settings.platforms[item.platform].navigationTimeoutMs + 15_000);
     const bundle = await extractConversationWithReceiverRecovery(
       serviceRuntime,
@@ -289,11 +300,32 @@ async function discoverAndExportItem(
         result.revision,
         "exported",
         AIEXPORTER_EXPORT_COMPATIBILITY_VERSION,
-      );
+        );
       return next;
     });
+    await deps.updateQueueStateWithDerived((current) => ({
+      ...current,
+      items: patchQueueItem(current.items, key, {
+        status: result.skipped ? "skipped" : "completed",
+        lastError: undefined,
+        errorCode: undefined,
+        skipReason: result.skipped ? "latest_exists" : undefined,
+        workerId: undefined,
+        resultRevision: result.revision,
+      }),
+    }));
     await deps.refreshQueueServices();
     return deps.getQueueStateSnapshot();
+  } catch (error) {
+    await deps.updateQueueStateWithDerived((current) => ({
+      ...current,
+      items: patchQueueItem(current.items, key, {
+        status: "failed",
+        lastError: error instanceof Error ? error.message : String(error),
+        workerId: undefined,
+      }),
+    }));
+    throw error;
   } finally {
     await browser.tabs.remove(tabId).catch(() => undefined);
   }

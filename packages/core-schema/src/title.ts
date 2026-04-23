@@ -1,5 +1,7 @@
 import type { ConversationBundle } from "./conversation";
 
+const FALLBACK_PROMPT_TITLE_MAX_LENGTH = 48;
+
 const GENERIC_TITLE_PATTERNS = [
   /^google gemini$/i,
   /^gemini$/i,
@@ -63,7 +65,7 @@ export function extractFirstUserPromptTitle(bundle: ConversationBundle): string 
     .map((line) => line.trim())
     .find(Boolean);
   if (!firstParagraph) return undefined;
-  const sliced = firstParagraph.slice(0, 80).trim();
+  const sliced = firstParagraph.slice(0, FALLBACK_PROMPT_TITLE_MAX_LENGTH).trim();
   return normalizeConversationTitle(sliced, bundle.sourceId);
 }
 

@@ -51,6 +51,16 @@ export function PopupQuickExportCard({ queueState, onRefresh }: PopupQuickExport
     void refreshActiveTarget().catch((loadError) => {
       setError(loadError instanceof Error ? loadError.message : "无法识别当前标签页。");
     });
+    if (!globalExportRoot) {
+      void resolveDefaultDownloadsRoot().then((response) => {
+        if (response.path) {
+          setOptions((current) => ({
+            ...current,
+            exportRootPath: current.exportRootPath || (response.path ?? ""),
+          }));
+        }
+      });
+    }
   }, []);
 
   useEffect(() => {

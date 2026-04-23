@@ -124,31 +124,19 @@ export async function getDownloadEntry(downloadId: number | undefined): Promise<
   return match;
 }
 
-async function resolveArtifactBaseName(artifact: ExportArtifactEntry): Promise<string> {
-  const conversationIndex = await loadConversationIndex();
-  const indexedTitle = conversationIndex.find(
-    (entry) => entry.platform === artifact.platform && entry.sourceId === artifact.sourceId,
-  )?.title;
-  const raw = indexedTitle?.trim() || artifact.sourceId;
-  const compact = raw.replace(/\s+/g, " ").slice(0, 80);
-  return sanitizePathSegment(compact) || sanitizePathSegment(artifact.sourceId);
-}
-
-async function resolveArtifactConversationFolder(artifact: ExportArtifactEntry): Promise<string> {
-  const conversationIndex = await loadConversationIndex();
-  const indexedTitle = conversationIndex.find(
-    (entry) => entry.platform === artifact.platform && entry.sourceId === artifact.sourceId,
-  )?.title;
-  return buildConversationFolderName(indexedTitle, artifact.sourceId);
-}
-
 async function buildFallbackArtifactRelativePath(
   artifact: ExportArtifactEntry,
   kind: "markdown" | "bundle",
 ): Promise<string> {
-  const conversationFolder = await resolveArtifactConversationFolder(artifact);
+  const conversationIndex = await loadConversationIndex();
+  const indexedTitle = conversationIndex.find(
+    (entry) => entry.platform === artifact.platform && entry.sourceId === artifact.sourceId,
+  )?.title;
+  const conversationFolder = buildConversationFolderName(indexedTitle, artifact.sourceId);
   const prefix = `AIexporter/${sanitizePathSegment(artifact.platform)}/${conversationFolder}`;
-  const basename = await resolveArtifactBaseName(artifact);
+  const raw = indexedTitle?.trim() || artifact.sourceId;
+  const compact = raw.replace(/\s+/g, " ").slice(0, 80);
+  const basename = sanitizePathSegment(compact) || sanitizePathSegment(artifact.sourceId);
   return kind === "markdown" ? `${prefix}/${basename}.md` : `${prefix}/${basename}.bundle.json`;
 }
 
@@ -302,6 +290,7 @@ function collectLinkedAttachmentsFromBundle(bundle: ConversationBundle): LinkedA
   bundle.messages.forEach((message) => {
     ATTACHMENT_LINK_PATTERN.lastIndex = 0;
     ATTACHMENT_RESOURCE_PATTERN.lastIndex = 0;
+    ATTACHMENT_PLAIN_PATTERN.lastIndex = 0;
     let match: RegExpExecArray | null;
     while ((match = ATTACHMENT_LINK_PATTERN.exec(message.markdown)) !== null) {
       const [, title = "", sourceUrl = ""] = match;
@@ -474,6 +463,55 @@ async function rewriteMarkdownEmbeddedImages(
   return output;
 }
 
+async function rewriteMarkdownAttachmentLinks(
+  markdown: string,
+  assetRelativePrefix: string,
+  assetMarkdownPrefix: string,
+  assetMap: Map<string, PreparedEmbeddedAsset>,
+): Promise<string> {
+  const pattern = /> \[attachment\]\s+\[([^\]]+)\]\(([^)]+)\)/g;
+  pattern.lastIndex = 0;
+  let cursor = 0;
+  let output = "";
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(markdown)) !== null) {
+    const [fullMatch, title = "", sourceUrl = ""] = match;
+    output += markdown.slice(cursor, match.index);
+    cursor = match.index + fullMatch.length;
+
+    if (!/^https?:\/\//i.test(sourceUrl)) {
+      output += fullMatch;
+      continue;
+    }
+
+    // Google Drive resources cannot be downloaded directly; keep the original link
+    if (/^https:\/\/drive\.google\.com\//i.test(sourceUrl)) {
+      output += fullMatch;
+      continue;
+    }
+
+    const existing = assetMap.get(sourceUrl);
+    if (existing) {
+      output += `> [attachment] [${title}](${existing.markdownPath})`;
+      continue;
+    }
+
+    const safeFilename = sanitizePathSegment(title) || sanitizePathSegment(sourceUrl.split("/").pop()?.split("?")[0] ?? "") || "attachment";
+    const asset: PreparedEmbeddedAsset = {
+      relativePath: joinRelativePath(assetRelativePrefix, safeFilename),
+      markdownPath: joinRelativePath(assetMarkdownPrefix, safeFilename),
+      mimeType: "application/octet-stream",
+      sourceUrl,
+    };
+    assetMap.set(sourceUrl, asset);
+    output += `> [attachment] [${title}](${asset.markdownPath})`;
+  }
+
+  output += markdown.slice(cursor);
+  return output;
+}
+
 async function prepareBundleForPersistence(
   bundle: ConversationBundle,
   revision: string,
@@ -492,15 +530,21 @@ async function prepareBundleForPersistence(
   const inheritedSourceUpdatedLabel =
     typeof bundle.meta?.["sourceUpdatedLabel"] === "string" ? bundle.meta["sourceUpdatedLabel"] : undefined;
   const rewrittenMessages = await Promise.all(
-    bundle.messages.map(async (message) => ({
-      ...message,
-      markdown: await rewriteMarkdownEmbeddedImages(
+    bundle.messages.map(async (message) => {
+      const withImages = await rewriteMarkdownEmbeddedImages(
         message.markdown,
         assetRelativePrefix,
         assetMarkdownPrefix,
         assetMap,
-      ),
-    })),
+      );
+      const withAttachments = await rewriteMarkdownAttachmentLinks(
+        withImages,
+        assetRelativePrefix,
+        assetMarkdownPrefix,
+        assetMap,
+      );
+      return { ...message, markdown: withAttachments };
+    }),
   );
   const resolvedTitle = resolveBundleTitle({
     ...bundle,
@@ -757,9 +801,15 @@ export async function persistBundle(
   const preferredTitle = resolvePreferredConversationTitle(bundle, indexedConversation?.title, queueState);
   const resolvedLiveTitle = resolveBundleTitle(bundle, preferredTitle);
   if (resolvedLiveTitle.usedFallback) {
-    throw new Error(
-      `无法解析对话标题，文件名将退化为用户首句（"${resolvedLiveTitle.title}"）。请等待 Gemini 生成摘要标题后重试。`,
-    );
+    await writeBackgroundLog("background.naming", "warn", "Using first user prompt as fallback export title.", {
+      code: "naming.title_fallback_used",
+      platform: bundle.platform,
+      sourceId: traceContext.sourceId ?? bundle.sourceId,
+      workerId: traceContext.workerId,
+      traceId: traceContext.traceId,
+      originalTitle: bundle.title,
+      resolvedTitle: resolvedLiveTitle.title,
+    });
   }
   const bundleForPersistence =
     resolvedLiveTitle.title === bundle.title
@@ -772,7 +822,7 @@ export async function persistBundle(
   const baseName = buildArtifactBaseName(bundleForPersistence);
   const flatOutput = options.flatOutput ?? false;
   const prefix = flatOutput ? "" : buildArchivePrefix(bundleForPersistence, revision);
-  const assetDirectoryName = `${baseName}.assets`;
+  const assetDirectoryName = flatOutput ? `${baseName}.assets` : "assets";
   const assetRelativePrefix = joinRelativePath(prefix, assetDirectoryName);
   const assetMarkdownPrefix = assetDirectoryName;
   const manifestVersion = browser.runtime.getManifest().version;
@@ -1138,7 +1188,7 @@ async function persistRemoteArtifact(
     await pingNativeHost();
   }
 
-  const downloaded = await downloadRemoteAsset(relativePath, url, options, exportRoot);
+  const downloaded = await downloadRemoteAsset(relativePath, url, { ...options, requireRelocation: hasCustomExportRoot(settings) }, exportRoot);
   if (hasCustomExportRoot(settings) && exportRoot) {
     const normalizedResolved = normalizeWindowsPath(downloaded.filename);
     const normalizedExpectedRoot = normalizeWindowsPath(exportRoot);

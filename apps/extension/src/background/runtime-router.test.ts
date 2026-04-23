@@ -159,7 +159,7 @@ function createQueueState(): QueueState {
 }
 
 function createRouter() {
-  const queueState = createQueueState();
+  let queueState = createQueueState();
   const serviceRuntime = {
     clearPlatformLocalRecords: vi.fn().mockResolvedValue(queueState),
     extractConversationFromTab: vi.fn(),
@@ -175,17 +175,20 @@ function createRouter() {
   const deps = {
     clearDebugState: vi.fn().mockResolvedValue({ logs: [] }),
     downloadTextAsset: vi.fn().mockResolvedValue({ downloadId: 1 }),
-    getQueueStateSnapshot: vi.fn().mockResolvedValue(queueState),
+    getQueueStateSnapshot: vi.fn().mockImplementation(async () => queueState),
     loadDebugState: vi.fn().mockResolvedValue({ logs: [] }),
-    loadQueueState: vi.fn().mockResolvedValue(queueState),
+    loadQueueState: vi.fn().mockImplementation(async () => queueState),
     openLatestArtifact: vi.fn().mockResolvedValue({ revision: "rev-1" }),
     persistBundle: vi.fn(),
     recordManualExportDebug: vi.fn().mockResolvedValue(undefined),
-    refreshQueueServices: vi.fn().mockResolvedValue(queueState),
+    refreshQueueServices: vi.fn().mockImplementation(async () => queueState),
     showLatestArtifactFolder: vi.fn().mockResolvedValue({ revision: "rev-1" }),
     syncDownloadUiWithSettings: vi.fn().mockResolvedValue(undefined),
     updateConversationIndex: vi.fn().mockResolvedValue([]),
-    updateQueueStateWithDerived: vi.fn().mockImplementation(async (updater) => updater(queueState)),
+    updateQueueStateWithDerived: vi.fn().mockImplementation(async (updater) => {
+      queueState = await updater(queueState);
+      return queueState;
+    }),
     writeBackgroundLog: vi.fn().mockResolvedValue(undefined),
   };
 
@@ -342,5 +345,85 @@ describe("background runtime router", () => {
 
     expect(globalThis.browser.tabs.reload).toHaveBeenCalledWith(11);
     expect(serviceRuntime.extractConversationFromTab).toHaveBeenCalledTimes(2);
+  });
+
+  it("marks discover-export items completed after a successful foreground fetch", async () => {
+    const { handler, serviceRuntime, deps, queueState } = createRouter();
+    queueState.items = [
+      {
+        key: "deepseek:conv-1:rev-1",
+        kind: "export",
+        priority: "retry",
+        platform: "deepseek",
+        status: "failed",
+        attempts: 1,
+        discoveredAt: "2026-04-23T10:00:00.000Z",
+        updatedAt: "2026-04-23T10:01:00.000Z",
+        lastError: "old error",
+        event: {
+          platform: "deepseek",
+          sourceId: "conv-1",
+          url: "https://chat.deepseek.com/a/chat/s/conv-1",
+          revisionFingerprint: "rev-1",
+        },
+      },
+    ];
+    const bundle = {
+      platform: "deepseek" as const,
+      sourceId: "conv-1",
+      url: "https://chat.deepseek.com/a/chat/s/conv-1",
+      title: "DeepSeek Chat",
+      extractedAt: "2026-04-23T10:02:00.000Z",
+      participants: [
+        { id: "user", role: "user", name: "User" },
+        { id: "assistant", role: "assistant", name: "DeepSeek" },
+      ],
+      messages: [{ id: "m1", role: "user", markdown: "hello" }],
+    };
+    serviceRuntime.extractConversationFromTab.mockResolvedValue(bundle);
+    deps.persistBundle.mockResolvedValue({
+      bundle,
+      revision: "rev-2",
+      files: ["AIexporter/deepseek/conv-1.md"],
+      downloadIds: [101],
+      artifactEntry: {
+        platform: "deepseek",
+        sourceId: "conv-1",
+        revision: "rev-2",
+        exportedAt: "2026-04-23T10:02:01.000Z",
+        localStatus: "present",
+        isLatestForConversation: true,
+      },
+      skipped: false,
+    });
+
+    vi.stubGlobal("browser", {
+      tabs: {
+        create: vi.fn().mockResolvedValue({ id: 88 }),
+        get: vi.fn().mockResolvedValue({
+          id: 88,
+          url: "https://chat.deepseek.com/a/chat/s/conv-1?aiexporter_worker=1",
+          status: "complete",
+        }),
+        remove: vi.fn().mockResolvedValue(undefined),
+      },
+    });
+
+    const nextState = (await handler(
+      { type: "queue-item-discover-export", key: "deepseek:conv-1:rev-1" },
+      {} as browser.runtime.MessageSender,
+    )) as QueueState;
+
+    expect(nextState.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "deepseek:conv-1:rev-1",
+          status: "completed",
+          resultRevision: "rev-2",
+          lastError: undefined,
+          workerId: undefined,
+        }),
+      ]),
+    );
   });
 });

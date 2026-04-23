@@ -2,7 +2,7 @@ import type { PlatformAdapter } from "@aiexporter/adapter-sdk";
 import { normalizeConversationUrl, type ConversationBundle, type Participant } from "@aiexporter/core-schema";
 import { extractConversationFromDom } from "./dom";
 import { extractSessionIdFromUrl } from "./discovery";
-import type { DeepSeekHistoryResponse, DeepSeekMessage } from "./types";
+import type { DeepSeekFileAttachment, DeepSeekHistoryResponse, DeepSeekMessage } from "./types";
 
 function buildParticipants(messages: ConversationBundle["messages"]): Participant[] {
   const seen = new Map<string, Participant>();
@@ -38,12 +38,14 @@ function messageIdOf(message: DeepSeekMessage, index: number): string {
 
 function normalizeTimestamp(value: string | number | undefined): string | undefined {
   if (typeof value === "number") {
-    return new Date(value * 1000).toISOString();
+    const ms = value > 1e12 ? value : value * 1000;
+    return new Date(ms).toISOString();
   }
   if (typeof value === "string" && value) {
     const numeric = Number(value);
     if (!Number.isNaN(numeric) && /^\d+(\.\d+)?$/.test(value)) {
-      return new Date(numeric * 1000).toISOString();
+      const ms = numeric > 1e12 ? numeric : numeric * 1000;
+      return new Date(ms).toISOString();
     }
     return value;
   }
@@ -52,6 +54,24 @@ function normalizeTimestamp(value: string | number | undefined): string | undefi
 
 function formatThinkingFragment(content: string): string {
   return `> [thinking]\n> ${content.replace(/\n/g, "\n> ")}`;
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes}B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)}KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)}MB`;
+}
+
+function buildFileAttachmentBlocks(files: DeepSeekFileAttachment[]): string[] {
+  return files
+    .filter((f) => f.file_name && f.status !== "FAILED" && f.error_code == null)
+    .map((f) => {
+      const sizePart = typeof f.file_size === "number" ? ` (${formatFileSize(f.file_size)})` : "";
+      if (f.download_url) {
+        return `> [attachment] [${f.file_name}](${f.download_url})`;
+      }
+      return `> [attachment] ${f.file_name}${sizePart}`;
+    });
 }
 
 function collectRemoteAttachments(markdown: string): { images: string[]; documents: string[] } {
@@ -89,24 +109,29 @@ function appendAttachmentBlocks(markdown: string): string {
 }
 
 function extractMessageMarkdown(message: DeepSeekMessage): string | undefined {
+  const fileBlocks = buildFileAttachmentBlocks(message.files ?? []);
+
   const direct = message.content?.trim();
-  if (direct) return appendAttachmentBlocks(direct);
+  const textMarkdown = direct ? appendAttachmentBlocks(direct) : (() => {
+    const fragmentBlocks =
+      message.fragments
+        ?.map((fragment) => {
+          const content = fragment.content?.trim();
+          if (!content) return null;
+          return fragment.type === "THINK" ? formatThinkingFragment(content) : content;
+        })
+        .filter((block): block is string => Boolean(block)) ?? [];
 
-  const fragmentBlocks =
-    message.fragments
-      ?.map((fragment) => {
-        const content = fragment.content?.trim();
-        if (!content) return null;
-        return fragment.type === "THINK" ? formatThinkingFragment(content) : content;
-      })
-      .filter((block): block is string => Boolean(block)) ?? [];
+    if (message.thinking_content?.trim()) {
+      fragmentBlocks.unshift(formatThinkingFragment(message.thinking_content.trim()));
+    }
 
-  if (message.thinking_content?.trim()) {
-    fragmentBlocks.unshift(formatThinkingFragment(message.thinking_content.trim()));
-  }
+    if (fragmentBlocks.length === 0) return undefined;
+    return appendAttachmentBlocks(fragmentBlocks.join("\n\n"));
+  })();
 
-  if (fragmentBlocks.length === 0) return undefined;
-  return appendAttachmentBlocks(fragmentBlocks.join("\n\n"));
+  if (!textMarkdown && fileBlocks.length === 0) return undefined;
+  return [...fileBlocks, ...(textMarkdown ? [textMarkdown] : [])].join("\n\n");
 }
 
 export function parseHistoryResponse(

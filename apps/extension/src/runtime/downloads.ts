@@ -15,6 +15,7 @@ export interface DownloadedAsset {
 
 interface DownloadTextAssetOptions {
   forceFresh?: boolean;
+  requireRelocation?: boolean;
 }
 
 interface DownloadChangeDelta {
@@ -36,7 +37,7 @@ interface DownloadSearchResult {
 }
 
 async function findExistingCompletedDownload(filename: string): Promise<DownloadedAsset | null> {
-  const matches = (await browser.downloads.search({} as browser.downloads.DownloadQuery)) as DownloadSearchResult[];
+  const matches = (await browser.downloads.search({ state: "complete" } as browser.downloads.DownloadQuery)) as DownloadSearchResult[];
   const normalizedExpected = filename.replace(/\//g, "\\").toLowerCase();
   const existing = matches
     .filter(
@@ -129,11 +130,10 @@ export async function applyDownloadUiPreference(enabled: boolean): Promise<void>
   await downloadsApi.setUiOptions({ enabled });
 }
 
-export async function downloadTextAsset(
+async function downloadDataUrlAsset(
+  dataUrl: string,
   filename: string,
-  content: string,
-  mimeType: string,
-  options: DownloadTextAssetOptions = {},
+  options: DownloadTextAssetOptions,
   rootPath?: string,
 ): Promise<DownloadedAsset> {
   const existing = options.forceFresh ? null : await findExistingCompletedDownload(filename);
@@ -142,7 +142,7 @@ export async function downloadTextAsset(
   }
 
   const downloadId = await browser.downloads.download({
-    url: toDataUrl(content, mimeType),
+    url: dataUrl,
     filename,
     saveAs: false,
     conflictAction: "uniquify",
@@ -170,6 +170,16 @@ export async function downloadTextAsset(
     downloadId,
     filename: resolvedFilename,
   };
+}
+
+export async function downloadTextAsset(
+  filename: string,
+  content: string,
+  mimeType: string,
+  options: DownloadTextAssetOptions = {},
+  rootPath?: string,
+): Promise<DownloadedAsset> {
+  return downloadDataUrlAsset(toDataUrl(content, mimeType), filename, options, rootPath);
 }
 
 export async function downloadBinaryAsset(
@@ -179,40 +189,7 @@ export async function downloadBinaryAsset(
   options: DownloadTextAssetOptions = {},
   rootPath?: string,
 ): Promise<DownloadedAsset> {
-  const existing = options.forceFresh ? null : await findExistingCompletedDownload(filename);
-  if (existing) {
-    return existing;
-  }
-
-  const downloadId = await browser.downloads.download({
-    url: toBase64DataUrl(contentBase64, mimeType),
-    filename,
-    saveAs: false,
-    conflictAction: "uniquify",
-  });
-
-  if (typeof downloadId !== "number") {
-    throw new Error(`Downloads API returned an invalid id for ${filename}.`);
-  }
-
-  await waitForDownloadCompletion(downloadId);
-  const actualFilename = await getCompletedDownloadFilename(downloadId);
-  let resolvedFilename = actualFilename;
-
-  try {
-    await pingNativeHost();
-    const relocated = await relocateFileWithNativeHost(actualFilename, filename, rootPath);
-    if (relocated.path) {
-      resolvedFilename = relocated.path;
-    }
-  } catch {
-    resolvedFilename = actualFilename;
-  }
-
-  return {
-    downloadId,
-    filename: resolvedFilename,
-  };
+  return downloadDataUrlAsset(toBase64DataUrl(contentBase64, mimeType), filename, options, rootPath);
 }
 
 export async function downloadRemoteAsset(
@@ -221,7 +198,8 @@ export async function downloadRemoteAsset(
   options: DownloadTextAssetOptions = {},
   rootPath?: string,
 ): Promise<DownloadedAsset> {
-  const existing = options.forceFresh ? null : await findExistingCompletedDownload(filename);
+  const existing =
+    options.forceFresh || options.requireRelocation ? null : await findExistingCompletedDownload(filename);
   if (existing) {
     return existing;
   }
@@ -247,7 +225,10 @@ export async function downloadRemoteAsset(
     if (relocated.path) {
       resolvedFilename = relocated.path;
     }
-  } catch {
+  } catch (err) {
+    if (options.requireRelocation) {
+      throw err;
+    }
     resolvedFilename = actualFilename;
   }
 

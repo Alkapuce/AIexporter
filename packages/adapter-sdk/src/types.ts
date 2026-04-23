@@ -35,7 +35,8 @@ export interface MainWorldBridgeMessage {
   response?:
     | {
         ok: true;
-        data: unknown;
+        data?: unknown;
+        text?: string;
       }
     | {
         ok: false;

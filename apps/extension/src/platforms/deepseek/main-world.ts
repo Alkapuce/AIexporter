@@ -95,51 +95,111 @@ export function installDeepSeekMainWorldBridge(): void {
   window.addEventListener("message", (event) => {
     if (event.source !== window) return;
     if (event.data?.source !== "aiexporter") return;
+    if (event.data?.type !== "aiexporter.deepseek.fetch-file-preview") return;
+
+    const requestId = typeof event.data.requestId === "string" ? event.data.requestId : "";
+    const fileId = typeof event.data.fileId === "string" ? event.data.fileId : "";
+    const sessionId = typeof event.data.sessionId === "string" ? event.data.sessionId : "";
+    const messageId = typeof event.data.messageId === "string" ? event.data.messageId : "";
+    if (!requestId || !fileId || !sessionId) return;
+
+    const previewUrl = `${DEEPSEEK_API_BASE}/file/preview?file_id=${encodeURIComponent(fileId)}&chat_session_id=${encodeURIComponent(sessionId)}${messageId ? `&message_id=${encodeURIComponent(messageId)}` : ""}`;
+    const previewXhr = new XMLHttpRequest();
+    previewXhr.open("GET", previewUrl, true);
+    previewXhr.withCredentials = true;
+    const previewHeaders = buildDeepSeekApiHeaders();
+    Object.entries(previewHeaders).forEach(([k, v]) => previewXhr.setRequestHeader(k, v));
+    previewXhr.onload = () => {
+      if (previewXhr.status < 200 || previewXhr.status >= 300) {
+        window.postMessage(
+          {
+            source: "aiexporter",
+            type: "deepseek-page-file-preview-response",
+            requestId,
+            fileId,
+            response: { ok: false, error: `DeepSeek file preview API responded with ${previewXhr.status}.` },
+          },
+          window.location.origin,
+        );
+        return;
+      }
+      window.postMessage(
+        {
+          source: "aiexporter",
+          type: "deepseek-page-file-preview-response",
+          requestId,
+          fileId,
+          response: { ok: true, text: previewXhr.responseText },
+        },
+        window.location.origin,
+      );
+    };
+    previewXhr.onerror = () => {
+      window.postMessage(
+        {
+          source: "aiexporter",
+          type: "deepseek-page-file-preview-response",
+          requestId,
+          fileId,
+          response: { ok: false, error: "Failed to fetch file preview." },
+        },
+        window.location.origin,
+      );
+    };
+    previewXhr.send();
+  });
+
+  window.addEventListener("message", (event) => {
+    if (event.source !== window) return;
+    if (event.data?.source !== "aiexporter") return;
     if (event.data?.type !== "aiexporter.deepseek.fetch-history") return;
 
     const requestId = typeof event.data.requestId === "string" ? event.data.requestId : "";
     const sourceId = typeof event.data.sourceId === "string" ? event.data.sourceId : "";
     if (!requestId || !sourceId) return;
 
-    void fetch(`${DEEPSEEK_API_BASE}/chat/history_messages?chat_session_id=${encodeURIComponent(sourceId)}`, {
-      method: "GET",
-      cache: "no-store",
-      credentials: "include",
-      headers: buildDeepSeekApiHeaders(),
-    })
-      .then(async (response) => {
-        if (!response.ok) {
-          throw new Error(`DeepSeek history API responded with ${response.status}.`);
-        }
-        const data = await response.json();
+    const xhr = new XMLHttpRequest();
+    xhr.open("GET", `${DEEPSEEK_API_BASE}/chat/history_messages?chat_session_id=${encodeURIComponent(sourceId)}`, true);
+    xhr.withCredentials = true;
+    const headers = buildDeepSeekApiHeaders();
+    Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
+    xhr.onload = () => {
+      if (xhr.status < 200 || xhr.status >= 300) {
         window.postMessage(
           {
             source: "aiexporter",
             type: "deepseek-page-api-response",
             requestId,
             sourceId,
-            response: {
-              ok: true,
-              data,
-            },
+            response: { ok: false, error: `DeepSeek history API responded with ${xhr.status}.` },
           },
           window.location.origin,
         );
-      })
-      .catch((error) => {
-        window.postMessage(
-          {
-            source: "aiexporter",
-            type: "deepseek-page-api-response",
-            requestId,
-            sourceId,
-            response: {
-              ok: false,
-              error: error instanceof Error ? error.message : "Failed to fetch DeepSeek history.",
-            },
-          },
-          window.location.origin,
-        );
-      });
+        return;
+      }
+      window.postMessage(
+        {
+          source: "aiexporter",
+          type: "deepseek-page-api-response",
+          requestId,
+          sourceId,
+          response: { ok: true, text: xhr.responseText },
+        },
+        window.location.origin,
+      );
+    };
+    xhr.onerror = () => {
+      window.postMessage(
+        {
+          source: "aiexporter",
+          type: "deepseek-page-api-response",
+          requestId,
+          sourceId,
+          response: { ok: false, error: "Failed to fetch DeepSeek history." },
+        },
+        window.location.origin,
+      );
+    };
+    xhr.send();
   });
 }

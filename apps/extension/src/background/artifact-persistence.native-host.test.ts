@@ -85,6 +85,32 @@ vi.mock("./state-access", () => ({
   refreshQueueServices,
 }));
 
+function createDefaultTestPlatformConfig() {
+  return {
+    enabled: true,
+    autoExportEnabled: true,
+    historyBackfillEnabled: true,
+    discoveryMode: "passive_only" as const,
+    maxConcurrency: 1,
+    minStartIntervalMs: 0,
+    navigationTimeoutMs: 0,
+    settleDelayMs: 0,
+    discoverySweepIntervalMs: 0,
+    reuseWorkerTabs: true,
+    bootstrapRequireFullHistory: false,
+    bootstrapWindowMode: "background_tab" as const,
+    discoveryReadyTimeoutMs: 0,
+    discoveryScrollStableRounds: 0,
+    discoveryDomMaxCycles: 0,
+    discoveryDomPostScrollWaitMs: 0,
+    discoveryDomStableCycles: 0,
+    discoveryDomScrollBottomAttempts: 0,
+    receiverReadyTimeoutMs: 0,
+    receiverRetryLimit: 0,
+    apiExtractMode: "page_world_first" as const,
+  };
+}
+
 function createQueueState(exportRootPath?: string): QueueState {
   return {
     items: [],
@@ -111,98 +137,10 @@ function createQueueState(exportRootPath?: string): QueueState {
         exportRootPath,
       },
       platforms: {
-        chatgpt: {
-          enabled: true,
-          autoExportEnabled: true,
-          historyBackfillEnabled: true,
-          discoveryMode: "passive_only",
-          maxConcurrency: 1,
-          minStartIntervalMs: 0,
-          navigationTimeoutMs: 0,
-          settleDelayMs: 0,
-          discoverySweepIntervalMs: 0,
-          reuseWorkerTabs: true,
-          bootstrapRequireFullHistory: false,
-          bootstrapWindowMode: "background_tab",
-          discoveryReadyTimeoutMs: 0,
-          discoveryScrollStableRounds: 0,
-          discoveryDomMaxCycles: 0,
-          discoveryDomPostScrollWaitMs: 0,
-          discoveryDomStableCycles: 0,
-          discoveryDomScrollBottomAttempts: 0,
-          receiverReadyTimeoutMs: 0,
-          receiverRetryLimit: 0,
-          apiExtractMode: "page_world_first",
-        },
-        gemini: {
-          enabled: true,
-          autoExportEnabled: true,
-          historyBackfillEnabled: true,
-          discoveryMode: "passive_only",
-          maxConcurrency: 1,
-          minStartIntervalMs: 0,
-          navigationTimeoutMs: 0,
-          settleDelayMs: 0,
-          discoverySweepIntervalMs: 0,
-          reuseWorkerTabs: true,
-          bootstrapRequireFullHistory: false,
-          bootstrapWindowMode: "background_tab",
-          discoveryReadyTimeoutMs: 0,
-          discoveryScrollStableRounds: 0,
-          discoveryDomMaxCycles: 0,
-          discoveryDomPostScrollWaitMs: 0,
-          discoveryDomStableCycles: 0,
-          discoveryDomScrollBottomAttempts: 0,
-          receiverReadyTimeoutMs: 0,
-          receiverRetryLimit: 0,
-          apiExtractMode: "page_world_first",
-        },
-        aistudio: {
-          enabled: true,
-          autoExportEnabled: true,
-          historyBackfillEnabled: true,
-          discoveryMode: "passive_only",
-          maxConcurrency: 1,
-          minStartIntervalMs: 0,
-          navigationTimeoutMs: 0,
-          settleDelayMs: 0,
-          discoverySweepIntervalMs: 0,
-          reuseWorkerTabs: true,
-          bootstrapRequireFullHistory: false,
-          bootstrapWindowMode: "background_tab",
-          discoveryReadyTimeoutMs: 0,
-          discoveryScrollStableRounds: 0,
-          discoveryDomMaxCycles: 0,
-          discoveryDomPostScrollWaitMs: 0,
-          discoveryDomStableCycles: 0,
-          discoveryDomScrollBottomAttempts: 0,
-          receiverReadyTimeoutMs: 0,
-          receiverRetryLimit: 0,
-          apiExtractMode: "page_world_first",
-        },
-        deepseek: {
-          enabled: true,
-          autoExportEnabled: true,
-          historyBackfillEnabled: true,
-          discoveryMode: "passive_only",
-          maxConcurrency: 1,
-          minStartIntervalMs: 0,
-          navigationTimeoutMs: 0,
-          settleDelayMs: 0,
-          discoverySweepIntervalMs: 0,
-          reuseWorkerTabs: true,
-          bootstrapRequireFullHistory: false,
-          bootstrapWindowMode: "background_tab",
-          discoveryReadyTimeoutMs: 0,
-          discoveryScrollStableRounds: 0,
-          discoveryDomMaxCycles: 0,
-          discoveryDomPostScrollWaitMs: 0,
-          discoveryDomStableCycles: 0,
-          discoveryDomScrollBottomAttempts: 0,
-          receiverReadyTimeoutMs: 0,
-          receiverRetryLimit: 0,
-          apiExtractMode: "page_world_first",
-        },
+        chatgpt: createDefaultTestPlatformConfig(),
+        gemini: createDefaultTestPlatformConfig(),
+        aistudio: createDefaultTestPlatformConfig(),
+        deepseek: createDefaultTestPlatformConfig(),
       },
     },
     services: {
@@ -263,6 +201,32 @@ function createBundle(): ConversationBundle {
         id: "assistant-1",
         role: "assistant",
         markdown: "![diagram](https://example.com/assets/diagram.png)",
+      },
+    ],
+  };
+}
+
+function createFallbackTitleBundle(): ConversationBundle {
+  return {
+    platform: "gemini",
+    sourceId: "fallback-title-conv",
+    url: "https://gemini.google.com/app/fallback-title-conv",
+    title: "Gemini",
+    extractedAt: "2026-04-21T09:36:43.249Z",
+    participants: [
+      { id: "user", role: "user", name: "User" },
+      { id: "assistant", role: "assistant", name: "Gemini" },
+    ],
+    messages: [
+      {
+        id: "user-1",
+        role: "user",
+        markdown: "请非常详细地系统讲解一下麦克斯韦方程组在不同介质边界条件下的推导过程、物理意义、典型例题和常见误区",
+      },
+      {
+        id: "assistant-1",
+        role: "assistant",
+        markdown: "当然可以。",
       },
     ],
   };
@@ -349,17 +313,47 @@ describe("persistBundle native host persistence", () => {
     );
     expect(downloadRemoteAsset).toHaveBeenCalledTimes(1);
     expect(downloadRemoteAsset).toHaveBeenCalledWith(
-      expect.stringMatching(/^AIexporter\/gemini\/.+\.assets\/01-diagram\.png$/),
+      expect.stringMatching(/^AIexporter\/gemini\/.+\/assets\/01-diagram\.png$/),
       "https://example.com/assets/diagram.png",
-      {},
+      { requireRelocation: true },
       "C:\\exports",
     );
     expect(result.files).toEqual(
       expect.arrayContaining([
         expect.stringMatching(/^C:\\exports\\AIexporter\\gemini\\.+\.md$/),
         expect.stringMatching(/^C:\\exports\\AIexporter\\gemini\\.+\.bundle\.json$/),
-        expect.stringMatching(/^C:\\exports\\AIexporter\\gemini\\.+\.assets\\01-diagram\.png$/),
+        expect.stringMatching(/^C:\\exports\\AIexporter\\gemini\\.+\\assets\\01-diagram\.png$/),
       ]),
+    );
+  });
+
+  it("allows exporting with a fallback prompt title instead of throwing", async () => {
+    const { persistBundle } = await import("./artifact-persistence");
+
+    await expect(persistBundle(createFallbackTitleBundle(), createQueueState("C:\\exports").settings)).resolves.toMatchObject({
+      bundle: {
+        title: "请非常详细地系统讲解一下麦克斯韦方程组在不同介质边界条件下的推导过程、物理意义、典型例题和常见误",
+      },
+    });
+  });
+
+  it("uses a document-specific asset directory for flat output exports", async () => {
+    const { persistBundle } = await import("./artifact-persistence");
+
+    await persistBundle(createBundle(), createQueueState("C:\\exports").settings, {}, { flatOutput: true });
+
+    expect(writeFileWithNativeHost).toHaveBeenNthCalledWith(
+      1,
+      "Remote Asset Conversation.md",
+      expect.any(String),
+      "utf8",
+      "C:\\exports",
+    );
+    expect(downloadRemoteAsset).toHaveBeenCalledWith(
+      "Remote Asset Conversation.assets/01-diagram.png",
+      "https://example.com/assets/diagram.png",
+      { requireRelocation: true },
+      "C:\\exports",
     );
   });
 });
