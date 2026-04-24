@@ -40,7 +40,10 @@ function runPowerShell(command) {
   }
 
   if (typeof result.status === "number" && result.status !== 0) {
-    const detail = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
+    const detail = [result.stdout, result.stderr]
+      .filter(Boolean)
+      .join("\n")
+      .trim();
     throw new Error(detail || `PowerShell exited with status ${result.status}`);
   }
 }
@@ -55,7 +58,7 @@ function buildOpenFilePowerShell(targetPath) {
     "$ErrorActionPreference = 'Stop'",
     `$targetPath = '${escapedTarget}'`,
     "$extension = [System.IO.Path]::GetExtension($targetPath)",
-    "$progId = (Get-ItemProperty \"HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\FileExts\\$extension\\UserChoice\" -ErrorAction SilentlyContinue).ProgId",
+    '$progId = (Get-ItemProperty "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\FileExts\\$extension\\UserChoice" -ErrorAction SilentlyContinue).ProgId',
     "if (-not $progId) { $progId = (Get-ItemProperty \"Registry::HKEY_CLASSES_ROOT\\$extension\" -ErrorAction SilentlyContinue).'(default)' }",
     "$command = $null",
     "if ($progId) {",
@@ -69,7 +72,7 @@ function buildOpenFilePowerShell(targetPath) {
     "  exit 0",
     "}",
     "if ($command) {",
-    "  if ($command -match '^\"([^\"]+)\"\\s*(.*)$') {",
+    '  if ($command -match \'^"([^"]+)"\\s*(.*)$\') {',
     "    $exe = $Matches[1]",
     "    $rest = $Matches[2]",
     "  } else {",
@@ -148,14 +151,10 @@ function normalizePath(inputPath) {
 }
 
 function readRegistryValue(keyPath, valueName) {
-  const result = spawnSync(
-    "reg.exe",
-    ["query", keyPath, "/v", valueName],
-    {
-      encoding: "utf8",
-      windowsHide: true,
-    },
-  );
+  const result = spawnSync("reg.exe", ["query", keyPath, "/v", valueName], {
+    encoding: "utf8",
+    windowsHide: true,
+  });
 
   if (result.error || result.status !== 0 || !result.stdout) {
     return null;
@@ -175,7 +174,10 @@ function readRegistryValue(keyPath, valueName) {
 
 function expandWindowsEnvPath(inputPath) {
   if (!inputPath) return inputPath;
-  return inputPath.replace(/%([^%]+)%/g, (_, name) => process.env[name] || `%${name}%`);
+  return inputPath.replace(
+    /%([^%]+)%/g,
+    (_, name) => process.env[name] || `%${name}%`,
+  );
 }
 
 function getKnownFolderDownloadsDirectory() {
@@ -193,7 +195,9 @@ function getKnownFolderDownloadsDirectory() {
 function getDownloadsDirectory() {
   const candidates = [
     getKnownFolderDownloadsDirectory(),
-    process.env.USERPROFILE ? path.join(process.env.USERPROFILE, "Downloads") : null,
+    process.env.USERPROFILE
+      ? path.join(process.env.USERPROFILE, "Downloads")
+      : null,
     path.join(os.homedir(), "Downloads"),
   ].filter(Boolean);
 
@@ -214,15 +218,39 @@ function isPathWithinRoot(candidatePath, rootPath) {
   const normalizedCandidate = path.resolve(normalizePath(candidatePath));
   const normalizedRoot = path.resolve(normalizePath(rootPath));
   const relative = path.relative(normalizedRoot, normalizedCandidate);
-  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+  return (
+    relative === "" ||
+    (!relative.startsWith("..") && !path.isAbsolute(relative))
+  );
+}
+
+function normalizePathForComparison(inputPath) {
+  const resolved = path.resolve(normalizePath(inputPath));
+  return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+}
+
+function isSameOrNestedPath(candidatePath, rootPath) {
+  const normalizedCandidate = normalizePathForComparison(candidatePath);
+  const normalizedRoot = normalizePathForComparison(rootPath);
+  const relative = path.relative(normalizedRoot, normalizedCandidate);
+  return (
+    relative === "" ||
+    (!relative.startsWith("..") && !path.isAbsolute(relative))
+  );
 }
 
 function pruneEmptyParentDirectories(startPath, stopPath) {
   let currentPath = normalizePath(startPath);
   const normalizedStop = normalizePath(stopPath);
 
-  while (currentPath !== normalizedStop && isPathWithinRoot(currentPath, normalizedStop)) {
-    if (!fs.existsSync(currentPath) || !fs.statSync(currentPath).isDirectory()) {
+  while (
+    currentPath !== normalizedStop &&
+    isPathWithinRoot(currentPath, normalizedStop)
+  ) {
+    if (
+      !fs.existsSync(currentPath) ||
+      !fs.statSync(currentPath).isDirectory()
+    ) {
       break;
     }
 
@@ -242,14 +270,20 @@ function pruneEmptyParentDirectories(startPath, stopPath) {
 function cleanupRelocatedSourceDirectories(sourcePath) {
   const downloadsRoot = getDownloadsDirectory();
   const sourceDirectory = path.dirname(normalizePath(sourcePath));
-  if (!fs.existsSync(downloadsRoot) || !isPathWithinRoot(sourceDirectory, downloadsRoot)) {
+  if (
+    !fs.existsSync(downloadsRoot) ||
+    !isPathWithinRoot(sourceDirectory, downloadsRoot)
+  ) {
     return;
   }
   pruneEmptyParentDirectories(sourceDirectory, downloadsRoot);
 }
 
 function resolveExportRoot(rootPath) {
-  const candidate = typeof rootPath === "string" && rootPath.trim() ? normalizePath(rootPath.trim()) : getDownloadsDirectory();
+  const candidate =
+    typeof rootPath === "string" && rootPath.trim()
+      ? normalizePath(rootPath.trim())
+      : getDownloadsDirectory();
   fs.mkdirSync(candidate, { recursive: true });
   return candidate;
 }
@@ -295,6 +329,22 @@ function relocateFile(sourcePath, relativePath, rootPath) {
 function movePath(sourcePath, targetPath) {
   const normalizedSource = normalizePath(sourcePath);
   const normalizedTarget = normalizePath(targetPath);
+  if (
+    normalizePathForComparison(normalizedSource) ===
+    normalizePathForComparison(normalizedTarget)
+  ) {
+    return normalizedTarget;
+  }
+  if (isSameOrNestedPath(normalizedTarget, normalizedSource)) {
+    throw new Error(
+      "Refusing to move a path into itself or one of its children.",
+    );
+  }
+  if (isSameOrNestedPath(normalizedSource, normalizedTarget)) {
+    throw new Error(
+      "Refusing to replace a parent directory with one of its children.",
+    );
+  }
   ensureParentDirectory(normalizedTarget);
 
   if (!fs.existsSync(normalizedSource)) {
@@ -313,9 +363,16 @@ function writeFile(relativePath, content, encoding, rootPath) {
   const targetPath = resolveTargetPath(relativePath, rootPath);
   ensureParentDirectory(targetPath);
   if (encoding === "base64") {
-    fs.writeFileSync(targetPath, Buffer.from(typeof content === "string" ? content : "", "base64"));
+    fs.writeFileSync(
+      targetPath,
+      Buffer.from(typeof content === "string" ? content : "", "base64"),
+    );
   } else {
-    fs.writeFileSync(targetPath, typeof content === "string" ? content : "", "utf8");
+    fs.writeFileSync(
+      targetPath,
+      typeof content === "string" ? content : "",
+      "utf8",
+    );
   }
   return targetPath;
 }
@@ -373,7 +430,8 @@ function pruneOldFiles(targetPath, pattern, recursive, olderThanDays) {
     return [];
   }
 
-  const thresholdMs = Math.max(1, Number(olderThanDays) || 0) * 24 * 60 * 60 * 1000;
+  const thresholdMs =
+    Math.max(1, Number(olderThanDays) || 0) * 24 * 60 * 60 * 1000;
   const now = Date.now();
   const pruned = [];
   const candidates = listFiles(normalizedRoot, pattern, recursive);
@@ -413,8 +471,12 @@ function handleMessage(message) {
     if (!fs.existsSync(targetPath)) {
       throw new Error(`Path does not exist: ${targetPath}`);
     }
-    const folderPath = fs.statSync(targetPath).isDirectory() ? targetPath : path.dirname(targetPath);
-    const selectTarget = fs.statSync(targetPath).isDirectory() ? folderPath : targetPath;
+    const folderPath = fs.statSync(targetPath).isDirectory()
+      ? targetPath
+      : path.dirname(targetPath);
+    const selectTarget = fs.statSync(targetPath).isDirectory()
+      ? folderPath
+      : targetPath;
     runPowerShell(buildShowFolderPowerShell(selectTarget));
     return { ok: true, action: "show-folder", path: folderPath };
   }
@@ -424,7 +486,11 @@ function handleMessage(message) {
     if (!message.relativePath || typeof message.relativePath !== "string") {
       throw new Error("A valid relativePath is required.");
     }
-    const relocatedPath = relocateFile(sourcePath, message.relativePath, message.rootPath);
+    const relocatedPath = relocateFile(
+      sourcePath,
+      message.relativePath,
+      message.rootPath,
+    );
     return { ok: true, action: "relocate-file", path: relocatedPath };
   }
 
@@ -449,7 +515,12 @@ function handleMessage(message) {
   }
 
   if (message.action === "write-file") {
-    const targetPath = writeFile(message.relativePath, message.content, message.encoding, message.rootPath);
+    const targetPath = writeFile(
+      message.relativePath,
+      message.content,
+      message.encoding,
+      message.rootPath,
+    );
     return {
       ok: true,
       action: "write-file",
@@ -458,10 +529,19 @@ function handleMessage(message) {
   }
 
   if (message.action === "pick-folder") {
-    const initialPath = typeof message.path === "string" && message.path.trim() ? normalizePath(message.path) : undefined;
+    const initialPath =
+      typeof message.path === "string" && message.path.trim()
+        ? normalizePath(message.path)
+        : undefined;
     const result = spawnSync(
       "powershell.exe",
-      ["-NoProfile", "-NonInteractive", "-STA", "-Command", buildPickFolderPowerShell(initialPath)],
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-STA",
+        "-Command",
+        buildPickFolderPowerShell(initialPath),
+      ],
       {
         encoding: "utf8",
         windowsHide: true,
@@ -480,8 +560,13 @@ function handleMessage(message) {
     }
 
     if (typeof result.status === "number" && result.status !== 0) {
-      const detail = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
-      throw new Error(detail || `PowerShell exited with status ${result.status}`);
+      const detail = [result.stdout, result.stderr]
+        .filter(Boolean)
+        .join("\n")
+        .trim();
+      throw new Error(
+        detail || `PowerShell exited with status ${result.status}`,
+      );
     }
 
     const pickedPath = result.stdout?.trim();
@@ -493,7 +578,11 @@ function handleMessage(message) {
   }
 
   if (message.action === "list-files") {
-    const paths = listFiles(message.path, message.pattern, message.recursive !== false);
+    const paths = listFiles(
+      message.path,
+      message.pattern,
+      message.recursive !== false,
+    );
     return {
       ok: true,
       action: "list-files",
@@ -519,7 +608,12 @@ function handleMessage(message) {
   }
 
   if (message.action === "prune-old-files") {
-    const paths = pruneOldFiles(message.path, message.pattern, message.recursive !== false, message.olderThanDays);
+    const paths = pruneOldFiles(
+      message.path,
+      message.pattern,
+      message.recursive !== false,
+      message.olderThanDays,
+    );
     return {
       ok: true,
       action: "prune-old-files",

@@ -38,54 +38,97 @@ describe("artifact helpers", () => {
   ];
 
   it("finds the latest artifact for a conversation", () => {
-    const latest = findLatestArtifactForConversation(artifacts, "deepseek", "conv-1");
+    const latest = findLatestArtifactForConversation(
+      artifacts,
+      "deepseek",
+      "conv-1",
+    );
     expect(latest?.revision).toBe("rev-3");
-    expect(findExactArtifact(artifacts, "deepseek", "conv-1", "rev-2")?.markdownDownloadId).toBe(102);
+    expect(
+      findExactArtifact(artifacts, "deepseek", "conv-1", "rev-2")
+        ?.markdownDownloadId,
+    ).toBe(102);
   });
 
   it("skips persistence when latest local artifact already exists", () => {
-    const latest = findLatestArtifactForConversation(artifacts, "deepseek", "conv-1");
+    const latest = findLatestArtifactForConversation(
+      artifacts,
+      "deepseek",
+      "conv-1",
+    );
     expect(
-      shouldSkipPersist(latest, "rev-3", {
-        ...DEFAULT_EXTENSION_SETTINGS,
-        downloads: {
-          ...DEFAULT_EXTENSION_SETTINGS.downloads,
-          skipIfLatestExists: true,
+      shouldSkipPersist(
+        latest,
+        "rev-3",
+        {
+          ...DEFAULT_EXTENSION_SETTINGS,
+          downloads: {
+            ...DEFAULT_EXTENSION_SETTINGS.downloads,
+            skipIfLatestExists: true,
+          },
         },
-      }, "compat-1", "compat-1"),
+        "compat-1",
+        "compat-1",
+      ),
     ).toBe(true);
   });
 
   it("marks retained latest artifacts and prunes older revisions", () => {
     const marked = markLatestArtifacts(artifacts, "deepseek", "conv-1", 1);
-    expect(marked.find((entry) => entry.revision === "rev-3")?.isLatestForConversation).toBe(true);
-    expect(marked.find((entry) => entry.revision === "rev-2")?.isLatestForConversation).toBe(false);
+    expect(
+      marked.find((entry) => entry.revision === "rev-3")
+        ?.isLatestForConversation,
+    ).toBe(true);
+    expect(
+      marked.find((entry) => entry.revision === "rev-2")
+        ?.isLatestForConversation,
+    ).toBe(false);
 
     const pruneResult = pruneOldArtifacts(artifacts, "deepseek", "conv-1", 1);
     const retained = pruneResult.nextEntries.filter(
-      (entry) => entry.platform === "deepseek" && entry.sourceId === "conv-1" && entry.localStatus !== "deleted",
+      (entry) =>
+        entry.platform === "deepseek" &&
+        entry.sourceId === "conv-1" &&
+        entry.localStatus !== "deleted",
     );
 
     expect(retained).toHaveLength(1);
     expect(retained[0]?.revision).toBe("rev-3");
-    expect(pruneResult.pruned.map((entry) => entry.revision)).toEqual(["rev-2", "rev-1"]);
+    expect(pruneResult.pruned.map((entry) => entry.revision)).toEqual([
+      "rev-2",
+      "rev-1",
+    ]);
   });
 
   it("does not skip when latest-exists policy is disabled", () => {
-    const latest = findLatestArtifactForConversation(artifacts, "deepseek", "conv-1");
+    const latest = findLatestArtifactForConversation(
+      artifacts,
+      "deepseek",
+      "conv-1",
+    );
     expect(
-      shouldSkipPersist(latest, "rev-3", {
-        ...DEFAULT_EXTENSION_SETTINGS,
-        downloads: {
-          ...DEFAULT_EXTENSION_SETTINGS.downloads,
-          skipIfLatestExists: false,
+      shouldSkipPersist(
+        latest,
+        "rev-3",
+        {
+          ...DEFAULT_EXTENSION_SETTINGS,
+          downloads: {
+            ...DEFAULT_EXTENSION_SETTINGS.downloads,
+            skipIfLatestExists: false,
+          },
         },
-      }, "compat-1", "compat-1"),
+        "compat-1",
+        "compat-1",
+      ),
     ).toBe(false);
   });
 
   it("does not skip when the latest artifact was exported by an older compatibility version", () => {
-    const latest = findLatestArtifactForConversation(artifacts, "deepseek", "conv-1");
+    const latest = findLatestArtifactForConversation(
+      artifacts,
+      "deepseek",
+      "conv-1",
+    );
     expect(
       shouldSkipPersist(
         latest,
@@ -121,7 +164,11 @@ describe("artifact helpers", () => {
       1,
     );
 
-    const latest = findLatestArtifactForConversation(marked, "deepseek", "conv-1");
+    const latest = findLatestArtifactForConversation(
+      marked,
+      "deepseek",
+      "conv-1",
+    );
     expect(latest?.revision).toBe("rev-4");
     expect(latest?.localStatus).toBe("skipped_existing");
     expect(latest?.isLatestForConversation).toBe(true);
@@ -153,5 +200,25 @@ describe("artifact helpers", () => {
 
     expect(openable?.revision).toBe("rev-1");
     expect(openable?.markdownDownloadId).toBe(201);
+  });
+
+  it("does not expose missing artifacts as openable local files", () => {
+    const openable = findLatestOpenableArtifactForConversation(
+      [
+        {
+          platform: "deepseek" as const,
+          sourceId: "conv-3",
+          revision: "rev-1",
+          exportedAt: "2026-03-25T13:01:00.000Z",
+          markdownFilename: "missing.md",
+          localStatus: "missing" as const,
+          isLatestForConversation: true,
+        },
+      ],
+      "deepseek",
+      "conv-3",
+    );
+
+    expect(openable).toBeUndefined();
   });
 });

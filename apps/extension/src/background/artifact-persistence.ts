@@ -17,7 +17,6 @@ import {
 import { serializeConversation } from "@aiexporter/core-markdown";
 import {
   downloadBinaryAsset,
-  downloadRemoteAsset,
   downloadTextAsset,
   isDownloadedAssetPresent,
   openDownloadedAsset,
@@ -30,10 +29,19 @@ import {
   findLatestOpenableArtifactForConversation,
   shouldSkipPersist,
 } from "../runtime/artifacts";
-import { markConversationIndexExportResult, upsertArtifactEntry } from "../runtime/indexes";
+import {
+  markConversationIndexExportResult,
+  upsertArtifactEntry,
+} from "../runtime/indexes";
 import { writeBackgroundLog } from "../runtime/logger";
 import { syncBundleToServer } from "../runtime/server-sync";
-import { loadArtifactIndex, loadConversationIndex, loadQueueState, updateArtifactIndex, updateConversationIndex } from "../runtime/storage";
+import {
+  loadArtifactIndex,
+  loadConversationIndex,
+  loadQueueState,
+  updateArtifactIndex,
+  updateConversationIndex,
+} from "../runtime/storage";
 import {
   checkPathExistsWithNativeHost,
   movePathWithNativeHost,
@@ -107,16 +115,28 @@ interface PreparedEmbeddedAsset {
   sourceUrl?: string;
 }
 
+interface PreparedPersistencePayload {
+  bundle: ConversationBundle;
+  markdown: string;
+  assets: PreparedEmbeddedAsset[];
+}
+
 const MARKDOWN_IMAGE_PATTERN = /!\[([^\]]*)\]\(([^)\s]+(?:\s+\"[^\"]*\")?)\)/g;
 const ATTACHMENT_LINK_PATTERN = /> \[attachment\]\s+\[([^\]]+)\]\(([^)]+)\)/g;
-const ATTACHMENT_RESOURCE_PATTERN = /> \[attachment\]\s+(.+?):\s+([^\s]+)\s*$/gm;
-const ATTACHMENT_PLAIN_PATTERN = /> \[attachment\]\s+(.+?)(?:\s+\(([^)]+)\))?\s*$/gm;
+const ATTACHMENT_RESOURCE_PATTERN =
+  /> \[attachment\]\s+(.+?):\s+([^\s]+)\s*$/gm;
+const ATTACHMENT_PLAIN_PATTERN =
+  /> \[attachment\]\s+(.+?)(?:\s+\(([^)]+)\))?\s*$/gm;
 
-export async function getDownloadEntry(downloadId: number | undefined): Promise<DownloadLookupResult> {
+export async function getDownloadEntry(
+  downloadId: number | undefined,
+): Promise<DownloadLookupResult> {
   if (typeof downloadId !== "number") {
     throw new Error("No download id was provided.");
   }
-  const matches = (await browser.downloads.search({ id: downloadId })) as DownloadLookupResult[];
+  const matches = (await browser.downloads.search({
+    id: downloadId,
+  })) as DownloadLookupResult[];
   const match = matches[0];
   if (!match) {
     throw new Error(`Download ${downloadId} was not found.`);
@@ -130,34 +150,54 @@ async function buildFallbackArtifactRelativePath(
 ): Promise<string> {
   const conversationIndex = await loadConversationIndex();
   const indexedTitle = conversationIndex.find(
-    (entry) => entry.platform === artifact.platform && entry.sourceId === artifact.sourceId,
+    (entry) =>
+      entry.platform === artifact.platform &&
+      entry.sourceId === artifact.sourceId,
   )?.title;
-  const conversationFolder = buildConversationFolderName(indexedTitle, artifact.sourceId);
+  const conversationFolder = buildConversationFolderName(
+    indexedTitle,
+    artifact.sourceId,
+  );
   const prefix = `AIexporter/${sanitizePathSegment(artifact.platform)}/${conversationFolder}`;
   const raw = indexedTitle?.trim() || artifact.sourceId;
   const compact = raw.replace(/\s+/g, " ").slice(0, 80);
-  const basename = sanitizePathSegment(compact) || sanitizePathSegment(artifact.sourceId);
-  return kind === "markdown" ? `${prefix}/${basename}.md` : `${prefix}/${basename}.bundle.json`;
+  const basename =
+    sanitizePathSegment(compact) || sanitizePathSegment(artifact.sourceId);
+  return kind === "markdown"
+    ? `${prefix}/${basename}.md`
+    : `${prefix}/${basename}.bundle.json`;
 }
 
 export async function ensureArtifactFilename(
   artifact: ExportArtifactEntry,
   kind: "markdown" | "bundle",
 ): Promise<string | undefined> {
-  const currentFilename = kind === "markdown" ? artifact.markdownFilename : artifact.bundleFilename;
+  const currentFilename =
+    kind === "markdown" ? artifact.markdownFilename : artifact.bundleFilename;
   const expectedSuffix = kind === "markdown" ? ".md" : ".bundle.json";
-  const expectedRelativePath = await buildFallbackArtifactRelativePath(artifact, kind);
-  const normalizedExpectedPath = expectedRelativePath.replace(/\//g, "\\").toLowerCase();
+  const expectedRelativePath = await buildFallbackArtifactRelativePath(
+    artifact,
+    kind,
+  );
+  const normalizedExpectedPath = expectedRelativePath
+    .replace(/\//g, "\\")
+    .toLowerCase();
 
   if (
     currentFilename &&
     currentFilename.toLowerCase().endsWith(expectedSuffix) &&
-    currentFilename.replace(/\//g, "\\").toLowerCase().endsWith(normalizedExpectedPath)
+    currentFilename
+      .replace(/\//g, "\\")
+      .toLowerCase()
+      .endsWith(normalizedExpectedPath)
   ) {
     return currentFilename;
   }
 
-  const downloadId = kind === "markdown" ? artifact.markdownDownloadId : artifact.bundleDownloadId;
+  const downloadId =
+    kind === "markdown"
+      ? artifact.markdownDownloadId
+      : artifact.bundleDownloadId;
   const entry = await getDownloadEntry(downloadId);
   if (!entry.filename) {
     return currentFilename;
@@ -167,7 +207,11 @@ export async function ensureArtifactFilename(
     const queueState = await loadQueueState();
     const exportRoot = getConfiguredExportRoot(queueState.settings);
     await pingNativeHost();
-    const relocated = await relocateFileWithNativeHost(entry.filename, expectedRelativePath, exportRoot);
+    const relocated = await relocateFileWithNativeHost(
+      entry.filename,
+      expectedRelativePath,
+      exportRoot,
+    );
     if (!relocated.path) {
       return entry.filename;
     }
@@ -212,10 +256,16 @@ function resolveImageExtension(mimeType: string): string {
   if (normalized === "image/jpeg") return "jpg";
   if (normalized === "image/svg+xml") return "svg";
   const slashIndex = normalized.indexOf("/");
-  return slashIndex >= 0 ? normalized.slice(slashIndex + 1).replace(/[^a-z0-9]+/g, "") || "bin" : "bin";
+  return slashIndex >= 0
+    ? normalized.slice(slashIndex + 1).replace(/[^a-z0-9]+/g, "") || "bin"
+    : "bin";
 }
 
-function buildEmbeddedImageName(rawAlt: string, index: number, mimeType: string): string {
+function buildEmbeddedImageName(
+  rawAlt: string,
+  index: number,
+  mimeType: string,
+): string {
   const normalizedAlt = rawAlt.trim().replace(/\.[a-z0-9]+$/i, "");
   const safeBase = sanitizePathSegment(normalizedAlt) || `image-${index}`;
   return `${String(index).padStart(2, "0")}-${safeBase}.${resolveImageExtension(mimeType)}`;
@@ -227,9 +277,15 @@ function extractMarkdownImageUrl(rawTarget: string): string {
   return (quoteIndex >= 0 ? trimmed.slice(0, quoteIndex) : trimmed).trim();
 }
 
-function getRevisionHistoryMode(settings: ExtensionSettings): "disabled" | "recycle_previous" | "archive_then_recycle" {
+function getRevisionHistoryMode(
+  settings: ExtensionSettings,
+): "disabled" | "recycle_previous" | "archive_then_recycle" {
   const mode = settings.downloads.revisionHistoryMode;
-  if (mode === "disabled" || mode === "archive_then_recycle" || mode === "recycle_previous") {
+  if (
+    mode === "disabled" ||
+    mode === "archive_then_recycle" ||
+    mode === "recycle_previous"
+  ) {
     return mode;
   }
   return "recycle_previous";
@@ -251,7 +307,10 @@ function normalizeWindowsPath(path: string | undefined): string {
   return (path ?? "").replace(/\//g, "\\").replace(/\\+$/, "").toLowerCase();
 }
 
-function buildRootedWindowsPath(rootPath: string, relativePath: string): string {
+function buildRootedWindowsPath(
+  rootPath: string,
+  relativePath: string,
+): string {
   const normalizedRoot = rootPath.replace(/[\\/]+$/, "");
   return `${normalizedRoot}\\${toWindowsPath(relativePath)}`;
 }
@@ -271,7 +330,9 @@ function getDirectoryPath(filePath: string | undefined): string | undefined {
   return separatorIndex >= 0 ? normalized.slice(0, separatorIndex) : undefined;
 }
 
-function collectLinkedAttachmentsFromBundle(bundle: ConversationBundle): LinkedAttachmentDescriptor[] {
+function collectLinkedAttachmentsFromBundle(
+  bundle: ConversationBundle,
+): LinkedAttachmentDescriptor[] {
   const existing = Array.isArray(bundle.meta?.["linkedAttachments"])
     ? (bundle.meta?.["linkedAttachments"] as LinkedAttachmentDescriptor[])
     : [];
@@ -303,7 +364,9 @@ function collectLinkedAttachmentsFromBundle(bundle: ConversationBundle): LinkedA
       const key = `${attachment.messageId}::${attachment.kind}::${attachment.sourceUrl ?? ""}::${attachment.title ?? ""}`;
       deduped.set(key, attachment);
     }
-    while ((match = ATTACHMENT_RESOURCE_PATTERN.exec(message.markdown)) !== null) {
+    while (
+      (match = ATTACHMENT_RESOURCE_PATTERN.exec(message.markdown)) !== null
+    ) {
       const [, label = "", resourceId = ""] = match;
       const attachment: LinkedAttachmentDescriptor = {
         messageId: message.id,
@@ -316,7 +379,8 @@ function collectLinkedAttachmentsFromBundle(bundle: ConversationBundle): LinkedA
     }
     while ((match = ATTACHMENT_PLAIN_PATTERN.exec(message.markdown)) !== null) {
       const [, title = "", mimeType = ""] = match;
-      if (!title.trim() || title.includes("](") || title.includes(": ")) continue;
+      if (!title.trim() || title.includes("](") || title.includes(": "))
+        continue;
       const attachment: LinkedAttachmentDescriptor = {
         messageId: message.id,
         kind: "document",
@@ -333,7 +397,8 @@ function collectLinkedAttachmentsFromBundle(bundle: ConversationBundle): LinkedA
 
 function inferMimeTypeFromFilename(filename: string | undefined): string {
   const normalized = filename?.trim().toLowerCase() ?? "";
-  if (normalized.endsWith(".jpg") || normalized.endsWith(".jpeg")) return "image/jpeg";
+  if (normalized.endsWith(".jpg") || normalized.endsWith(".jpeg"))
+    return "image/jpeg";
   if (normalized.endsWith(".png")) return "image/png";
   if (normalized.endsWith(".webp")) return "image/webp";
   if (normalized.endsWith(".gif")) return "image/gif";
@@ -347,18 +412,31 @@ export function resolvePreferredConversationTitle(
   indexedTitle: string | undefined,
   queueState: Awaited<ReturnType<typeof loadQueueState>>,
 ): string | undefined {
-  const normalizedIndexedTitle = normalizeConversationTitle(indexedTitle, bundle.sourceId);
+  const normalizedIndexedTitle = normalizeConversationTitle(
+    indexedTitle,
+    bundle.sourceId,
+  );
   const queueTitle = [...queueState.items]
-    .filter((item) => item.platform === bundle.platform && item.event.sourceId === bundle.sourceId)
-    .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
-    .map((item) => normalizeConversationTitle(item.event.title, bundle.sourceId))
+    .filter(
+      (item) =>
+        item.platform === bundle.platform &&
+        item.event.sourceId === bundle.sourceId,
+    )
+    .sort(
+      (left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt),
+    )
+    .map((item) =>
+      normalizeConversationTitle(item.event.title, bundle.sourceId),
+    )
     .find((title): title is string => Boolean(title));
   const promptFallbackTitle = extractFirstUserPromptTitle(bundle);
 
   // If the queue item's title is just the first user prompt (no real title was discovered),
   // prefer the indexed title which may have been captured from a better discovery pass.
   const queueTitleIsPromptFallback =
-    Boolean(queueTitle) && Boolean(promptFallbackTitle) && queueTitle === promptFallbackTitle;
+    Boolean(queueTitle) &&
+    Boolean(promptFallbackTitle) &&
+    queueTitle === promptFallbackTitle;
 
   if (queueTitleIsPromptFallback) {
     return normalizedIndexedTitle ?? queueTitle;
@@ -394,16 +472,30 @@ function encodeUint8ArrayToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-async function fetchRemoteAssetContentBase64(url: string): Promise<string> {
+async function fetchRemoteAssetContent(
+  url: string,
+  fallbackMimeType: string,
+): Promise<{ contentBase64: string; mimeType: string }> {
   const response = await fetch(url, {
     credentials: "include",
   });
   if (!response.ok) {
-    throw new Error(`Failed to fetch remote asset: ${response.status} ${response.statusText}`.trim());
+    throw new Error(
+      `Failed to fetch remote asset: ${response.status} ${response.statusText}`.trim(),
+    );
   }
 
   const buffer = await response.arrayBuffer();
-  return encodeUint8ArrayToBase64(new Uint8Array(buffer));
+  const mimeType =
+    response.headers
+      ?.get("content-type")
+      ?.split(";")[0]
+      ?.trim()
+      .toLowerCase() || fallbackMimeType;
+  return {
+    contentBase64: encodeUint8ArrayToBase64(new Uint8Array(buffer)),
+    mimeType,
+  };
 }
 
 async function rewriteMarkdownEmbeddedImages(
@@ -430,7 +522,9 @@ async function rewriteMarkdownEmbeddedImages(
       continue;
     }
 
-    const dataUriMatch = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/i.exec(target);
+    const dataUriMatch = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/i.exec(
+      target,
+    );
     if (dataUriMatch) {
       assetIndex += 1;
       const [, mimeType, contentBase64] = dataUriMatch;
@@ -450,7 +544,13 @@ async function rewriteMarkdownEmbeddedImages(
 
     if (/^https?:\/\//i.test(target)) {
       assetIndex += 1;
-      const asset = buildRemoteImageAsset(target, altText, assetIndex, assetRelativePrefix, assetMarkdownPrefix);
+      const asset = buildRemoteImageAsset(
+        target,
+        altText,
+        assetIndex,
+        assetRelativePrefix,
+        assetMarkdownPrefix,
+      );
       assetMap.set(target, asset);
       output += `![${altText}](${asset.markdownPath})`;
       continue;
@@ -497,7 +597,10 @@ async function rewriteMarkdownAttachmentLinks(
       continue;
     }
 
-    const safeFilename = sanitizePathSegment(title) || sanitizePathSegment(sourceUrl.split("/").pop()?.split("?")[0] ?? "") || "attachment";
+    const safeFilename =
+      sanitizePathSegment(title) ||
+      sanitizePathSegment(sourceUrl.split("/").pop()?.split("?")[0] ?? "") ||
+      "attachment";
     const asset: PreparedEmbeddedAsset = {
       relativePath: joinRelativePath(assetRelativePrefix, safeFilename),
       markdownPath: joinRelativePath(assetMarkdownPrefix, safeFilename),
@@ -521,14 +624,12 @@ async function prepareBundleForPersistence(
   sourceUpdatedLabel?: string,
   preferredTitle?: string,
   options: PersistBundleOptions = {},
-): Promise<{
-  bundle: ConversationBundle;
-  markdown: string;
-  assets: PreparedEmbeddedAsset[];
-}> {
+): Promise<PreparedPersistencePayload> {
   const assetMap = new Map<string, PreparedEmbeddedAsset>();
   const inheritedSourceUpdatedLabel =
-    typeof bundle.meta?.["sourceUpdatedLabel"] === "string" ? bundle.meta["sourceUpdatedLabel"] : undefined;
+    typeof bundle.meta?.["sourceUpdatedLabel"] === "string"
+      ? bundle.meta["sourceUpdatedLabel"]
+      : undefined;
   const rewrittenMessages = await Promise.all(
     bundle.messages.map(async (message) => {
       const withImages = await rewriteMarkdownEmbeddedImages(
@@ -546,10 +647,13 @@ async function prepareBundleForPersistence(
       return { ...message, markdown: withAttachments };
     }),
   );
-  const resolvedTitle = resolveBundleTitle({
-    ...bundle,
-    messages: rewrittenMessages,
-  }, preferredTitle);
+  const resolvedTitle = resolveBundleTitle(
+    {
+      ...bundle,
+      messages: rewrittenMessages,
+    },
+    preferredTitle,
+  );
   const linkedAttachments = collectLinkedAttachmentsFromBundle({
     ...bundle,
     messages: rewrittenMessages,
@@ -579,7 +683,8 @@ async function prepareBundleForPersistence(
     revision,
     preset: options.preset ?? "complete",
     renderOptions: options.markdownOptions,
-    includeMessageTimestamps: options.markdownOptions?.includeMessageTimestamps ?? true,
+    includeMessageTimestamps:
+      options.markdownOptions?.includeMessageTimestamps ?? true,
   });
   return {
     bundle: preparedBundle,
@@ -588,10 +693,75 @@ async function prepareBundleForPersistence(
   };
 }
 
-export async function openLatestArtifact(platform: ExportArtifactEntry["platform"], sourceId: string): Promise<ExportArtifactEntry> {
+function restoreFailedRemoteAssetReferences(
+  prepared: PreparedPersistencePayload,
+  failedAssets: PreparedEmbeddedAsset[],
+  revision: string,
+  options: PersistBundleOptions = {},
+): PreparedPersistencePayload {
+  if (failedAssets.length === 0) {
+    return prepared;
+  }
+
+  const failedPathMap = new Map(
+    failedAssets
+      .filter((asset): asset is PreparedEmbeddedAsset & { sourceUrl: string } =>
+        Boolean(asset.sourceUrl),
+      )
+      .map((asset) => [asset.markdownPath, asset.sourceUrl]),
+  );
+
+  const restoreMarkdown = (markdown: string): string => {
+    let next = markdown;
+    failedPathMap.forEach((sourceUrl, markdownPath) => {
+      next = next.replaceAll(`](${markdownPath})`, `](${sourceUrl})`);
+    });
+    return next;
+  };
+
+  const restoredBundle: ConversationBundle = {
+    ...prepared.bundle,
+    messages: prepared.bundle.messages.map((message) => ({
+      ...message,
+      markdown: restoreMarkdown(message.markdown),
+    })),
+    meta: {
+      ...(prepared.bundle.meta ?? {}),
+      embeddedAssets: (Array.isArray(prepared.bundle.meta?.["embeddedAssets"])
+        ? prepared.bundle.meta?.["embeddedAssets"]
+        : []
+      ).filter(
+        (asset) =>
+          !failedPathMap.has(String((asset as { path?: unknown }).path ?? "")),
+      ),
+    },
+  };
+
+  const serialized = serializeConversation(restoredBundle, {
+    revision,
+    preset: options.preset ?? "complete",
+    renderOptions: options.markdownOptions,
+    includeMessageTimestamps:
+      options.markdownOptions?.includeMessageTimestamps ?? true,
+  });
+
+  return {
+    bundle: restoredBundle,
+    markdown: serialized.markdown,
+    assets: prepared.assets.filter(
+      (asset) => !failedPathMap.has(asset.markdownPath),
+    ),
+  };
+}
+
+export async function openLatestArtifact(
+  platform: ExportArtifactEntry["platform"],
+  sourceId: string,
+): Promise<ExportArtifactEntry> {
   const artifact = await getLatestArtifactOrThrow(platform, sourceId);
   const filename =
-    (artifact.markdownFilename || typeof artifact.markdownDownloadId === "number"
+    (artifact.markdownFilename ||
+    typeof artifact.markdownDownloadId === "number"
       ? await ensureArtifactFilename(artifact, "markdown")
       : undefined) ??
     (artifact.bundleFilename || typeof artifact.bundleDownloadId === "number"
@@ -605,10 +775,17 @@ export async function openLatestArtifact(platform: ExportArtifactEntry["platform
     await pingNativeHost();
     await openFileWithNativeHost(filename);
   } catch {
-    if (typeof (artifact.markdownDownloadId ?? artifact.bundleDownloadId) !== "number") {
-      throw new Error(`文件由本地服务写入，需要 native host 才能打开。请确认 native host 已注册并运行。文件路径：${filename}`);
+    if (
+      typeof (artifact.markdownDownloadId ?? artifact.bundleDownloadId) !==
+      "number"
+    ) {
+      throw new Error(
+        `文件由本地服务写入，需要 native host 才能打开。请确认 native host 已注册并运行。文件路径：${filename}`,
+      );
     }
-    await openDownloadedAsset(artifact.markdownDownloadId ?? artifact.bundleDownloadId);
+    await openDownloadedAsset(
+      artifact.markdownDownloadId ?? artifact.bundleDownloadId,
+    );
   }
 
   return artifact;
@@ -620,7 +797,8 @@ export async function showLatestArtifactFolder(
 ): Promise<ExportArtifactEntry> {
   const artifact = await getLatestArtifactOrThrow(platform, sourceId);
   const filename =
-    (artifact.markdownFilename || typeof artifact.markdownDownloadId === "number"
+    (artifact.markdownFilename ||
+    typeof artifact.markdownDownloadId === "number"
       ? await ensureArtifactFilename(artifact, "markdown")
       : undefined) ??
     (artifact.bundleFilename || typeof artifact.bundleDownloadId === "number"
@@ -634,10 +812,17 @@ export async function showLatestArtifactFolder(
     await pingNativeHost();
     await showFolderWithNativeHost(filename);
   } catch {
-    if (typeof (artifact.markdownDownloadId ?? artifact.bundleDownloadId) !== "number") {
-      throw new Error(`文件由本地服务写入，需要 native host 才能显示目录。请确认 native host 已注册并运行。文件路径：${filename}`);
+    if (
+      typeof (artifact.markdownDownloadId ?? artifact.bundleDownloadId) !==
+      "number"
+    ) {
+      throw new Error(
+        `文件由本地服务写入，需要 native host 才能显示目录。请确认 native host 已注册并运行。文件路径：${filename}`,
+      );
     }
-    await showDownloadedAsset(artifact.markdownDownloadId ?? artifact.bundleDownloadId);
+    await showDownloadedAsset(
+      artifact.markdownDownloadId ?? artifact.bundleDownloadId,
+    );
   }
 
   return artifact;
@@ -649,26 +834,36 @@ async function maybeLogNamingResolution(
 ): Promise<void> {
   const resolved = resolveBundleTitle(bundle);
   if (resolved.usedFallback) {
-    await writeBackgroundLog("background.naming", "warn", "Fell back to the first user prompt for export title.", {
-      code: "naming.title_fallback_used",
-      platform: bundle.platform,
-      sourceId: traceContext.sourceId ?? bundle.sourceId,
-      workerId: traceContext.workerId,
-      traceId: traceContext.traceId,
-      originalTitle: bundle.title,
-      resolvedTitle: resolved.title,
-    });
+    await writeBackgroundLog(
+      "background.naming",
+      "warn",
+      "Fell back to the first user prompt for export title.",
+      {
+        code: "naming.title_fallback_used",
+        platform: bundle.platform,
+        sourceId: traceContext.sourceId ?? bundle.sourceId,
+        workerId: traceContext.workerId,
+        traceId: traceContext.traceId,
+        originalTitle: bundle.title,
+        resolvedTitle: resolved.title,
+      },
+    );
   }
 
   if (resolved.unresolved) {
-    await writeBackgroundLog("background.naming", "warn", "Conversation title remained unresolved after fallback.", {
-      code: "naming.unresolved_generic_title",
-      platform: bundle.platform,
-      sourceId: traceContext.sourceId ?? bundle.sourceId,
-      workerId: traceContext.workerId,
-      traceId: traceContext.traceId,
-      originalTitle: bundle.title,
-    });
+    await writeBackgroundLog(
+      "background.naming",
+      "warn",
+      "Conversation title remained unresolved after fallback.",
+      {
+        code: "naming.unresolved_generic_title",
+        platform: bundle.platform,
+        sourceId: traceContext.sourceId ?? bundle.sourceId,
+        workerId: traceContext.workerId,
+        traceId: traceContext.traceId,
+        originalTitle: bundle.title,
+      },
+    );
   }
 }
 
@@ -684,7 +879,8 @@ async function recycleOrArchivePreviousConversation(
   }
 
   const currentFolderPath =
-    getDirectoryPath(latestArtifact.markdownFilename) ?? getDirectoryPath(latestArtifact.bundleFilename);
+    getDirectoryPath(latestArtifact.markdownFilename) ??
+    getDirectoryPath(latestArtifact.bundleFilename);
   if (!currentFolderPath) {
     return latestArtifact;
   }
@@ -694,69 +890,101 @@ async function recycleOrArchivePreviousConversation(
     try {
       await pingNativeHost();
       await recyclePathWithNativeHost(currentFolderPath);
-      await writeBackgroundLog("background.artifact", "info", "Recycled previous local revision.", {
-        code: "artifact.previous_revision_recycled",
-        platform: bundle.platform,
-        sourceId: traceContext.sourceId ?? bundle.sourceId,
-        workerId: traceContext.workerId,
-        traceId: traceContext.traceId,
-        previousRevision: latestArtifact.revision,
-        folderPath: currentFolderPath,
-      });
+      await writeBackgroundLog(
+        "background.artifact",
+        "info",
+        "Recycled previous local revision.",
+        {
+          code: "artifact.previous_revision_recycled",
+          platform: bundle.platform,
+          sourceId: traceContext.sourceId ?? bundle.sourceId,
+          workerId: traceContext.workerId,
+          traceId: traceContext.traceId,
+          previousRevision: latestArtifact.revision,
+          folderPath: currentFolderPath,
+        },
+      );
       return {
         ...latestArtifact,
         localStatus: "deleted",
       };
     } catch (error) {
-      await writeBackgroundLog("background.artifact", "warn", "Failed to recycle previous local revision.", {
-        code: "artifact.previous_revision_recycle_failed",
+      await writeBackgroundLog(
+        "background.artifact",
+        "warn",
+        "Failed to recycle previous local revision.",
+        {
+          code: "artifact.previous_revision_recycle_failed",
+          platform: bundle.platform,
+          sourceId: traceContext.sourceId ?? bundle.sourceId,
+          workerId: traceContext.workerId,
+          traceId: traceContext.traceId,
+          previousRevision: latestArtifact.revision,
+          folderPath: currentFolderPath,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      );
+    }
+    return latestArtifact;
+  }
+
+  const archivePrefix = buildArchivedRevisionPrefix(
+    bundle,
+    latestArtifact.revision,
+  );
+  const exportRoot = getConfiguredExportRoot(settings);
+  const rootMarkerIndex = currentFolderPath
+    .toLowerCase()
+    .indexOf("\\aiexporter\\");
+  const inferredExportRoot =
+    rootMarkerIndex >= 0
+      ? currentFolderPath.slice(0, rootMarkerIndex)
+      : exportRoot;
+  const archiveTargetFolder =
+    `${(inferredExportRoot ?? exportRoot ?? "").replace(/[\\/]+$/, "")}\\${toWindowsPath(archivePrefix)}`.replace(
+      /^\\+/,
+      "",
+    );
+  try {
+    await pingNativeHost();
+    await movePathWithNativeHost(currentFolderPath, archiveTargetFolder);
+    const pruned = await pruneOldFilesWithNativeHost(
+      `${(inferredExportRoot ?? exportRoot ?? "").replace(/[\\/]+$/, "")}\\AIexporter\\Archive`.replace(
+        /^\\+/,
+        "",
+      ),
+      "*",
+      true,
+      getArchiveRetentionDays(settings),
+    );
+    await writeBackgroundLog(
+      "background.artifact",
+      "info",
+      "Archived previous local revision.",
+      {
+        code: "artifact.previous_revision_archived",
         platform: bundle.platform,
         sourceId: traceContext.sourceId ?? bundle.sourceId,
         workerId: traceContext.workerId,
         traceId: traceContext.traceId,
         previousRevision: latestArtifact.revision,
-        folderPath: currentFolderPath,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-    return latestArtifact;
-  }
-
-  const archivePrefix = buildArchivedRevisionPrefix(bundle, latestArtifact.revision);
-  const exportRoot = getConfiguredExportRoot(settings);
-  const rootMarkerIndex = currentFolderPath.toLowerCase().indexOf("\\aiexporter\\");
-  const inferredExportRoot = rootMarkerIndex >= 0 ? currentFolderPath.slice(0, rootMarkerIndex) : exportRoot;
-  const archiveTargetFolder = `${(inferredExportRoot ?? exportRoot ?? "").replace(/[\\/]+$/, "")}\\${toWindowsPath(archivePrefix)}`.replace(
-    /^\\+/,
-    "",
-  );
-  try {
-    await pingNativeHost();
-    await movePathWithNativeHost(currentFolderPath, archiveTargetFolder);
-    const pruned = await pruneOldFilesWithNativeHost(
-      `${(inferredExportRoot ?? exportRoot ?? "").replace(/[\\/]+$/, "")}\\AIexporter\\Archive`.replace(/^\\+/, ""),
-      "*",
-      true,
-      getArchiveRetentionDays(settings),
+        archiveTargetFolder,
+      },
     );
-    await writeBackgroundLog("background.artifact", "info", "Archived previous local revision.", {
-      code: "artifact.previous_revision_archived",
-      platform: bundle.platform,
-      sourceId: traceContext.sourceId ?? bundle.sourceId,
-      workerId: traceContext.workerId,
-      traceId: traceContext.traceId,
-      previousRevision: latestArtifact.revision,
-      archiveTargetFolder,
-    });
     if ((pruned.paths ?? []).length > 0) {
-      await writeBackgroundLog("background.artifact", "info", "Pruned archived local revisions older than retention.", {
-        code: "artifact.previous_revision_archive_pruned",
-        platform: bundle.platform,
-        sourceId: traceContext.sourceId ?? bundle.sourceId,
-        workerId: traceContext.workerId,
-        traceId: traceContext.traceId,
-        prunedCount: (pruned.paths ?? []).length,
-      });
+      await writeBackgroundLog(
+        "background.artifact",
+        "info",
+        "Pruned archived local revisions older than retention.",
+        {
+          code: "artifact.previous_revision_archive_pruned",
+          platform: bundle.platform,
+          sourceId: traceContext.sourceId ?? bundle.sourceId,
+          workerId: traceContext.workerId,
+          traceId: traceContext.traceId,
+          prunedCount: (pruned.paths ?? []).length,
+        },
+      );
     }
     const archivedMarkdownFilename = latestArtifact.markdownFilename
       ? `${archiveTargetFolder}\\${latestArtifact.markdownFilename.split(/[/\\]/).pop()}`
@@ -773,16 +1001,21 @@ async function recycleOrArchivePreviousConversation(
       isLatestForConversation: false,
     };
   } catch (error) {
-    await writeBackgroundLog("background.artifact", "warn", "Failed to archive previous local revision.", {
-      code: "artifact.previous_revision_archive_failed",
-      platform: bundle.platform,
-      sourceId: traceContext.sourceId ?? bundle.sourceId,
-      workerId: traceContext.workerId,
-      traceId: traceContext.traceId,
-      previousRevision: latestArtifact.revision,
-      archiveTargetFolder,
-      error: error instanceof Error ? error.message : String(error),
-    });
+    await writeBackgroundLog(
+      "background.artifact",
+      "warn",
+      "Failed to archive previous local revision.",
+      {
+        code: "artifact.previous_revision_archive_failed",
+        platform: bundle.platform,
+        sourceId: traceContext.sourceId ?? bundle.sourceId,
+        workerId: traceContext.workerId,
+        traceId: traceContext.traceId,
+        previousRevision: latestArtifact.revision,
+        archiveTargetFolder,
+        error: error instanceof Error ? error.message : String(error),
+      },
+    );
     return latestArtifact;
   }
 }
@@ -796,20 +1029,30 @@ export async function persistBundle(
   const queueState = await loadQueueState();
   const conversationIndex = await loadConversationIndex();
   const indexedConversation = conversationIndex.find(
-    (entry) => entry.platform === bundle.platform && entry.sourceId === bundle.sourceId,
+    (entry) =>
+      entry.platform === bundle.platform && entry.sourceId === bundle.sourceId,
   );
-  const preferredTitle = resolvePreferredConversationTitle(bundle, indexedConversation?.title, queueState);
+  const preferredTitle = resolvePreferredConversationTitle(
+    bundle,
+    indexedConversation?.title,
+    queueState,
+  );
   const resolvedLiveTitle = resolveBundleTitle(bundle, preferredTitle);
   if (resolvedLiveTitle.usedFallback) {
-    await writeBackgroundLog("background.naming", "warn", "Using first user prompt as fallback export title.", {
-      code: "naming.title_fallback_used",
-      platform: bundle.platform,
-      sourceId: traceContext.sourceId ?? bundle.sourceId,
-      workerId: traceContext.workerId,
-      traceId: traceContext.traceId,
-      originalTitle: bundle.title,
-      resolvedTitle: resolvedLiveTitle.title,
-    });
+    await writeBackgroundLog(
+      "background.naming",
+      "warn",
+      "Using first user prompt as fallback export title.",
+      {
+        code: "naming.title_fallback_used",
+        platform: bundle.platform,
+        sourceId: traceContext.sourceId ?? bundle.sourceId,
+        workerId: traceContext.workerId,
+        traceId: traceContext.traceId,
+        originalTitle: bundle.title,
+        resolvedTitle: resolvedLiveTitle.title,
+      },
+    );
   }
   const bundleForPersistence =
     resolvedLiveTitle.title === bundle.title
@@ -821,7 +1064,9 @@ export async function persistBundle(
   const revision = await buildBundleRevision(bundleForPersistence);
   const baseName = buildArtifactBaseName(bundleForPersistence);
   const flatOutput = options.flatOutput ?? false;
-  const prefix = flatOutput ? "" : buildArchivePrefix(bundleForPersistence, revision);
+  const prefix = flatOutput
+    ? ""
+    : buildArchivePrefix(bundleForPersistence, revision);
   const assetDirectoryName = flatOutput ? `${baseName}.assets` : "assets";
   const assetRelativePrefix = joinRelativePath(prefix, assetDirectoryName);
   const assetMarkdownPrefix = assetDirectoryName;
@@ -853,17 +1098,31 @@ export async function persistBundle(
     options,
   );
   await maybeLogNamingResolution(prepared.bundle, traceContext);
-  const latestArtifact = findLatestArtifactForConversation(artifacts, bundle.platform, bundle.sourceId);
-  const exactArtifact = findExactArtifact(artifacts, bundle.platform, bundle.sourceId, revision);
-
-  await writeBackgroundLog("background.persist", "info", "Persisting conversation bundle.", {
-    platform: bundle.platform,
-    sourceId: traceContext.sourceId ?? bundle.sourceId,
-    workerId: traceContext.workerId,
-    traceId: traceContext.traceId,
+  const latestArtifact = findLatestArtifactForConversation(
+    artifacts,
+    bundle.platform,
+    bundle.sourceId,
+  );
+  const exactArtifact = findExactArtifact(
+    artifacts,
+    bundle.platform,
+    bundle.sourceId,
     revision,
-    messageCount: bundle.messages.length,
-  });
+  );
+
+  await writeBackgroundLog(
+    "background.persist",
+    "info",
+    "Persisting conversation bundle.",
+    {
+      platform: bundle.platform,
+      sourceId: traceContext.sourceId ?? bundle.sourceId,
+      workerId: traceContext.workerId,
+      traceId: traceContext.traceId,
+      revision,
+      messageCount: bundle.messages.length,
+    },
+  );
 
   const latestArtifactFilesPresent = latestArtifact
     ? await verifyArtifactFilesPresent(latestArtifact)
@@ -884,16 +1143,21 @@ export async function persistBundle(
       ),
     );
 
-    await writeBackgroundLog("background.persist", "warn", "Latest artifact index entry was missing local files, forcing re-export.", {
-      code: "artifact.latest_missing_local_files",
-      platform: bundle.platform,
-      sourceId: traceContext.sourceId ?? bundle.sourceId,
-      workerId: traceContext.workerId,
-      traceId: traceContext.traceId,
-      revision: latestArtifact.revision,
-      markdownFilename: latestArtifact.markdownFilename,
-      bundleFilename: latestArtifact.bundleFilename,
-    });
+    await writeBackgroundLog(
+      "background.persist",
+      "warn",
+      "Latest artifact index entry was missing local files, forcing re-export.",
+      {
+        code: "artifact.latest_missing_local_files",
+        platform: bundle.platform,
+        sourceId: traceContext.sourceId ?? bundle.sourceId,
+        workerId: traceContext.workerId,
+        traceId: traceContext.traceId,
+        revision: latestArtifact.revision,
+        markdownFilename: latestArtifact.markdownFilename,
+        bundleFilename: latestArtifact.bundleFilename,
+      },
+    );
   }
 
   if (
@@ -906,8 +1170,16 @@ export async function persistBundle(
       markdownRelativePath: joinRelativePath(prefix, `${baseName}.md`),
       bundleRelativePath: joinRelativePath(prefix, `${baseName}.bundle.json`),
     })) &&
-    (!includeMarkdown || Boolean(latestArtifact?.markdownFilename || typeof latestArtifact?.markdownDownloadId === "number")) &&
-    (!includeBundleJson || Boolean(latestArtifact?.bundleFilename || typeof latestArtifact?.bundleDownloadId === "number")) &&
+    (!includeMarkdown ||
+      Boolean(
+        latestArtifact?.markdownFilename ||
+        typeof latestArtifact?.markdownDownloadId === "number",
+      )) &&
+    (!includeBundleJson ||
+      Boolean(
+        latestArtifact?.bundleFilename ||
+        typeof latestArtifact?.bundleDownloadId === "number",
+      )) &&
     shouldSkipPersist(
       latestArtifact,
       revision,
@@ -931,24 +1203,31 @@ export async function persistBundle(
         bundleFilename: latestArtifact?.bundleFilename,
       } satisfies ExportArtifactEntry);
 
-    await writeBackgroundLog("background.persist", "info", "Skipped existing latest artifact.", {
-      code: "download.existing_latest",
-      platform: bundle.platform,
-      sourceId: traceContext.sourceId ?? bundle.sourceId,
-      workerId: traceContext.workerId,
-      traceId: traceContext.traceId,
-      revision,
-    });
+    await writeBackgroundLog(
+      "background.persist",
+      "info",
+      "Skipped existing latest artifact.",
+      {
+        code: "download.existing_latest",
+        platform: bundle.platform,
+        sourceId: traceContext.sourceId ?? bundle.sourceId,
+        workerId: traceContext.workerId,
+        traceId: traceContext.traceId,
+        revision,
+      },
+    );
 
     return {
       bundle: prepared.bundle,
       revision,
-      files: [artifactEntry.markdownFilename, artifactEntry.bundleFilename].filter(
-        (value): value is string => Boolean(value),
-      ),
-      downloadIds: [artifactEntry.markdownDownloadId, artifactEntry.bundleDownloadId].filter(
-        (value): value is number => typeof value === "number",
-      ),
+      files: [
+        artifactEntry.markdownFilename,
+        artifactEntry.bundleFilename,
+      ].filter((value): value is string => Boolean(value)),
+      downloadIds: [
+        artifactEntry.markdownDownloadId,
+        artifactEntry.bundleDownloadId,
+      ].filter((value): value is number => typeof value === "number"),
       artifactEntry,
       skipped: true,
     };
@@ -962,37 +1241,119 @@ export async function persistBundle(
     traceContext,
   );
 
-  let markdownFile =
-    includeMarkdown
-      ? await persistTextArtifact(joinRelativePath(prefix, `${baseName}.md`), prepared.markdown, "text/markdown", effectiveSettings)
-      : undefined;
-  let bundleFile =
-    includeBundleJson
-      ? await persistTextArtifact(
-          joinRelativePath(prefix, `${baseName}.bundle.json`),
-          JSON.stringify(prepared.bundle, null, 2),
-          "application/json",
-          effectiveSettings,
-        )
-      : undefined;
-  const assetFiles = await Promise.all(
-    prepared.assets.map((asset) =>
-      asset.sourceUrl
-        ? persistRemoteArtifact(asset.relativePath, asset.sourceUrl, effectiveSettings)
-        : persistBinaryArtifact(asset.relativePath, asset.contentBase64 ?? "", asset.mimeType, effectiveSettings),
-    ),
+  const persistedAssets = await Promise.all(
+    prepared.assets.map(async (asset) => {
+      if (!asset.sourceUrl) {
+        return {
+          asset,
+          file: await persistBinaryArtifact(
+            asset.relativePath,
+            asset.contentBase64 ?? "",
+            asset.mimeType,
+            effectiveSettings,
+          ),
+        };
+      }
+
+      try {
+        return {
+          asset,
+          file: await persistRemoteArtifact(
+            asset.relativePath,
+            asset.sourceUrl,
+            asset.mimeType,
+            effectiveSettings,
+          ),
+        };
+      } catch (error) {
+        return {
+          asset,
+          error,
+        };
+      }
+    }),
   );
+
+  const failedRemoteAssets = persistedAssets
+    .filter(
+      (
+        entry,
+      ): entry is {
+        asset: PreparedEmbeddedAsset & { sourceUrl: string };
+        error: unknown;
+      } => Boolean(entry.asset.sourceUrl) && "error" in entry,
+    )
+    .map((entry) => entry.asset);
+  if (failedRemoteAssets.length > 0) {
+    await writeBackgroundLog(
+      "background.persist",
+      "warn",
+      "Some remote assets could not be written locally; keeping original remote URLs instead.",
+      {
+        code: "artifact.remote_asset_kept_as_source_url",
+        platform: bundle.platform,
+        sourceId: traceContext.sourceId ?? bundle.sourceId,
+        workerId: traceContext.workerId,
+        traceId: traceContext.traceId,
+        failedAssetCount: failedRemoteAssets.length,
+        failedAssetUrls: failedRemoteAssets.map((asset) => asset.sourceUrl),
+      },
+    );
+  }
+
+  const finalPrepared = restoreFailedRemoteAssetReferences(
+    prepared,
+    failedRemoteAssets,
+    revision,
+    options,
+  );
+  const assetFiles = persistedAssets
+    .filter(
+      (
+        entry,
+      ): entry is {
+        asset: PreparedEmbeddedAsset;
+        file: Awaited<ReturnType<typeof persistBinaryArtifact>>;
+      } => "file" in entry,
+    )
+    .map((entry) => entry.file);
+
+  let markdownFile = includeMarkdown
+    ? await persistTextArtifact(
+        joinRelativePath(prefix, `${baseName}.md`),
+        finalPrepared.markdown,
+        "text/markdown",
+        effectiveSettings,
+      )
+    : undefined;
+  let bundleFile = includeBundleJson
+    ? await persistTextArtifact(
+        joinRelativePath(prefix, `${baseName}.bundle.json`),
+        JSON.stringify(finalPrepared.bundle, null, 2),
+        "application/json",
+        effectiveSettings,
+      )
+    : undefined;
   try {
-    await syncBundleToServer(prepared.bundle, effectiveSettings, manifestVersion);
+    await syncBundleToServer(
+      finalPrepared.bundle,
+      effectiveSettings,
+      manifestVersion,
+    );
   } catch (error) {
-    await writeBackgroundLog("background.persist", "warn", "Server sync failed, continuing with local persistence.", {
-      code: "artifact.server_sync_failed",
-      platform: bundle.platform,
-      sourceId: traceContext.sourceId ?? bundle.sourceId,
-      workerId: traceContext.workerId,
-      traceId: traceContext.traceId,
-      error: error instanceof Error ? error.message : String(error),
-    });
+    await writeBackgroundLog(
+      "background.persist",
+      "warn",
+      "Server sync failed, continuing with local persistence.",
+      {
+        code: "artifact.server_sync_failed",
+        platform: bundle.platform,
+        sourceId: traceContext.sourceId ?? bundle.sourceId,
+        workerId: traceContext.workerId,
+        traceId: traceContext.traceId,
+        error: error instanceof Error ? error.message : String(error),
+      },
+    );
   }
 
   let artifactEntry: ExportArtifactEntry = {
@@ -1009,44 +1370,65 @@ export async function persistBundle(
   };
 
   if (!(await verifyArtifactFilesPresent(artifactEntry))) {
-    await writeBackgroundLog("background.persist", "warn", "Downloaded artifacts were missing after initial write, retrying with forced fresh downloads.", {
-      code: "artifact.retry_missing_after_write",
-      platform: bundle.platform,
-      sourceId: traceContext.sourceId ?? bundle.sourceId,
-      workerId: traceContext.workerId,
-      traceId: traceContext.traceId,
-      revision,
-      markdownFilename: artifactEntry.markdownFilename,
-      bundleFilename: artifactEntry.bundleFilename,
-    });
+    await writeBackgroundLog(
+      "background.persist",
+      "warn",
+      "Downloaded artifacts were missing after initial write, retrying with forced fresh downloads.",
+      {
+        code: "artifact.retry_missing_after_write",
+        platform: bundle.platform,
+        sourceId: traceContext.sourceId ?? bundle.sourceId,
+        workerId: traceContext.workerId,
+        traceId: traceContext.traceId,
+        revision,
+        markdownFilename: artifactEntry.markdownFilename,
+        bundleFilename: artifactEntry.bundleFilename,
+      },
+    );
 
-    markdownFile =
-      includeMarkdown
-        ? await persistTextArtifact(joinRelativePath(prefix, `${baseName}.md`), prepared.markdown, "text/markdown", effectiveSettings, {
+    markdownFile = includeMarkdown
+      ? await persistTextArtifact(
+          joinRelativePath(prefix, `${baseName}.md`),
+          finalPrepared.markdown,
+          "text/markdown",
+          effectiveSettings,
+          {
             forceFresh: true,
-          })
-        : undefined;
-    bundleFile =
-      includeBundleJson
-        ? await persistTextArtifact(
-            joinRelativePath(prefix, `${baseName}.bundle.json`),
-            JSON.stringify(prepared.bundle, null, 2),
-            "application/json",
-            effectiveSettings,
-            {
-              forceFresh: true,
-            },
-          )
-        : undefined;
+          },
+        )
+      : undefined;
+    bundleFile = includeBundleJson
+      ? await persistTextArtifact(
+          joinRelativePath(prefix, `${baseName}.bundle.json`),
+          JSON.stringify(finalPrepared.bundle, null, 2),
+          "application/json",
+          effectiveSettings,
+          {
+            forceFresh: true,
+          },
+        )
+      : undefined;
     await Promise.all(
-      prepared.assets.map((asset) =>
+      finalPrepared.assets.map((asset) =>
         asset.sourceUrl
-          ? persistRemoteArtifact(asset.relativePath, asset.sourceUrl, effectiveSettings, {
-              forceFresh: true,
-            })
-          : persistBinaryArtifact(asset.relativePath, asset.contentBase64 ?? "", asset.mimeType, effectiveSettings, {
-              forceFresh: true,
-            }),
+          ? persistRemoteArtifact(
+              asset.relativePath,
+              asset.sourceUrl,
+              asset.mimeType,
+              effectiveSettings,
+              {
+                forceFresh: true,
+              },
+            )
+          : persistBinaryArtifact(
+              asset.relativePath,
+              asset.contentBase64 ?? "",
+              asset.mimeType,
+              effectiveSettings,
+              {
+                forceFresh: true,
+              },
+            ),
       ),
     );
 
@@ -1065,11 +1447,17 @@ export async function persistBundle(
 
   await updateArtifactIndex(async (entries) => {
     let nextEntries = entries.map((entry) => {
-      if (entry.platform !== bundle.platform || entry.sourceId !== bundle.sourceId) {
+      if (
+        entry.platform !== bundle.platform ||
+        entry.sourceId !== bundle.sourceId
+      ) {
         return entry;
       }
 
-      if (previousArtifactState && entry.revision === previousArtifactState.revision) {
+      if (
+        previousArtifactState &&
+        entry.revision === previousArtifactState.revision
+      ) {
         return {
           ...entry,
           ...previousArtifactState,
@@ -1078,7 +1466,8 @@ export async function persistBundle(
 
       if (entry.revision !== revision) {
         const localStatus: ExportArtifactEntry["localStatus"] =
-          getRevisionHistoryMode(effectiveSettings) === "archive_then_recycle" && entry.localStatus === "archived"
+          getRevisionHistoryMode(effectiveSettings) ===
+            "archive_then_recycle" && entry.localStatus === "archived"
             ? "archived"
             : "deleted";
         return {
@@ -1101,7 +1490,10 @@ export async function persistBundle(
         : entry,
     );
 
-    if (previousArtifactState && previousArtifactState.localStatus === "deleted") {
+    if (
+      previousArtifactState &&
+      previousArtifactState.localStatus === "deleted"
+    ) {
       await removeDownloadedAsset(previousArtifactState.markdownDownloadId);
       await removeDownloadedAsset(previousArtifactState.bundleDownloadId);
     }
@@ -1110,11 +1502,13 @@ export async function persistBundle(
   });
 
   return {
-    bundle: prepared.bundle,
+    bundle: finalPrepared.bundle,
     revision,
-    files: [markdownFile?.filename, bundleFile?.filename, ...assetFiles.map((asset) => asset?.filename)].filter(
-      (value): value is string => Boolean(value),
-    ),
+    files: [
+      markdownFile?.filename,
+      bundleFile?.filename,
+      ...assetFiles.map((asset) => asset?.filename),
+    ].filter((value): value is string => Boolean(value)),
     downloadIds: [markdownFile?.downloadId, bundleFile?.downloadId].filter(
       (value): value is number => typeof value === "number",
     ),
@@ -1132,7 +1526,12 @@ async function persistTextArtifact(
   const exportRoot = getConfiguredExportRoot(settings);
   try {
     await pingNativeHost();
-    const response = await writeFileWithNativeHost(relativePath, content, "utf8", exportRoot);
+    const response = await writeFileWithNativeHost(
+      relativePath,
+      content,
+      "utf8",
+      exportRoot,
+    );
     if (response.path) {
       return {
         downloadId: undefined,
@@ -1143,12 +1542,21 @@ async function persistTextArtifact(
     if (hasCustomExportRoot(settings)) {
       throw getNativeHostRequiredError(settings);
     }
-    if (error instanceof Error && error.message.includes("Custom export root requires native host")) {
+    if (
+      error instanceof Error &&
+      error.message.includes("Custom export root requires native host")
+    ) {
       throw error;
     }
   }
 
-  return downloadTextAsset(relativePath, content, mimeType, options, exportRoot);
+  return downloadTextAsset(
+    relativePath,
+    content,
+    mimeType,
+    options,
+    exportRoot,
+  );
 }
 
 async function persistBinaryArtifact(
@@ -1161,7 +1569,12 @@ async function persistBinaryArtifact(
   const exportRoot = getConfiguredExportRoot(settings);
   try {
     await pingNativeHost();
-    const response = await writeFileWithNativeHost(relativePath, contentBase64, "base64", exportRoot);
+    const response = await writeFileWithNativeHost(
+      relativePath,
+      contentBase64,
+      "base64",
+      exportRoot,
+    );
     if (response.path) {
       return {
         downloadId: undefined,
@@ -1174,32 +1587,35 @@ async function persistBinaryArtifact(
     }
   }
 
-  return downloadBinaryAsset(relativePath, contentBase64, mimeType, options, exportRoot);
+  return downloadBinaryAsset(
+    relativePath,
+    contentBase64,
+    mimeType,
+    options,
+    exportRoot,
+  );
 }
 
 async function persistRemoteArtifact(
   relativePath: string,
   url: string,
+  mimeType: string,
   settings: ExtensionSettings,
   options: { forceFresh?: boolean } = {},
 ) {
-  const exportRoot = getConfiguredExportRoot(settings);
-  if (hasCustomExportRoot(settings)) {
-    await pingNativeHost();
-  }
-
-  const downloaded = await downloadRemoteAsset(relativePath, url, { ...options, requireRelocation: hasCustomExportRoot(settings) }, exportRoot);
-  if (hasCustomExportRoot(settings) && exportRoot) {
-    const normalizedResolved = normalizeWindowsPath(downloaded.filename);
-    const normalizedExpectedRoot = normalizeWindowsPath(exportRoot);
-    if (!normalizedResolved.startsWith(`${normalizedExpectedRoot}\\`) && normalizedResolved !== normalizedExpectedRoot) {
-      throw new Error(`Remote asset was not written under the selected export root: ${downloaded.filename}`);
-    }
-  }
-  return downloaded;
+  const fetched = await fetchRemoteAssetContent(url, mimeType);
+  return await persistBinaryArtifact(
+    relativePath,
+    fetched.contentBase64,
+    fetched.mimeType,
+    settings,
+    options,
+  );
 }
 
-async function verifyArtifactFilePath(path: string | undefined): Promise<boolean> {
+async function verifyArtifactFilePath(
+  path: string | undefined,
+): Promise<boolean> {
   if (!path) return false;
 
   try {
@@ -1224,15 +1640,21 @@ export async function verifyTargetArtifactPathsPresent({
     return true;
   }
 
-  const expectedMarkdownPath = includeMarkdown ? buildRootedWindowsPath(exportRoot, markdownRelativePath) : undefined;
-  const expectedBundlePath = includeBundleJson ? buildRootedWindowsPath(exportRoot, bundleRelativePath) : undefined;
+  const expectedMarkdownPath = includeMarkdown
+    ? buildRootedWindowsPath(exportRoot, markdownRelativePath)
+    : undefined;
+  const expectedBundlePath = includeBundleJson
+    ? buildRootedWindowsPath(exportRoot, bundleRelativePath)
+    : undefined;
 
   const latestMarkdownMatchesTarget =
     includeMarkdown &&
-    normalizeWindowsPath(latestArtifact?.markdownFilename) === normalizeWindowsPath(expectedMarkdownPath);
+    normalizeWindowsPath(latestArtifact?.markdownFilename) ===
+      normalizeWindowsPath(expectedMarkdownPath);
   const latestBundleMatchesTarget =
     includeBundleJson &&
-    normalizeWindowsPath(latestArtifact?.bundleFilename) === normalizeWindowsPath(expectedBundlePath);
+    normalizeWindowsPath(latestArtifact?.bundleFilename) ===
+      normalizeWindowsPath(expectedBundlePath);
 
   const [markdownPresent, bundlePresent] = await Promise.all([
     includeMarkdown
@@ -1250,9 +1672,16 @@ export async function verifyTargetArtifactPathsPresent({
   return markdownPresent && bundlePresent;
 }
 
-export async function verifyArtifactFilesPresent(artifact: ExportArtifactEntry): Promise<boolean> {
-  const requiresMarkdown = Boolean(artifact.markdownFilename || typeof artifact.markdownDownloadId === "number");
-  const requiresBundle = Boolean(artifact.bundleFilename || typeof artifact.bundleDownloadId === "number");
+export async function verifyArtifactFilesPresent(
+  artifact: ExportArtifactEntry,
+): Promise<boolean> {
+  const requiresMarkdown = Boolean(
+    artifact.markdownFilename ||
+    typeof artifact.markdownDownloadId === "number",
+  );
+  const requiresBundle = Boolean(
+    artifact.bundleFilename || typeof artifact.bundleDownloadId === "number",
+  );
   if (!requiresMarkdown && !requiresBundle) {
     return false;
   }
@@ -1269,11 +1698,20 @@ export async function verifyArtifactFilesPresent(artifact: ExportArtifactEntry):
   }
 
   const [markdownByDownload, bundleByDownload] = await Promise.all([
-    isDownloadedAssetPresent(artifact.markdownDownloadId, artifact.markdownFilename),
-    isDownloadedAssetPresent(artifact.bundleDownloadId, artifact.bundleFilename),
+    isDownloadedAssetPresent(
+      artifact.markdownDownloadId,
+      artifact.markdownFilename,
+    ),
+    isDownloadedAssetPresent(
+      artifact.bundleDownloadId,
+      artifact.bundleFilename,
+    ),
   ]);
 
-  return (!requiresMarkdown || markdownByDownload) && (!requiresBundle || bundleByDownload);
+  return (
+    (!requiresMarkdown || markdownByDownload) &&
+    (!requiresBundle || bundleByDownload)
+  );
 }
 
 export async function markBundleExportResult(

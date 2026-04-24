@@ -18,19 +18,26 @@ function createQueueState(overrides: Partial<QueueState> = {}): QueueState {
 
 describe("artifact sync state helpers", () => {
   it("runs weekly sync when there is no recorded successful sync", () => {
-    expect(isAutomaticArtifactSyncDue(undefined, Date.parse("2026-04-17T00:00:00.000Z"))).toBe(true);
+    expect(
+      isAutomaticArtifactSyncDue(
+        undefined,
+        Date.parse("2026-04-17T00:00:00.000Z"),
+      ),
+    ).toBe(true);
   });
 
   it("waits roughly a week before the next automatic sync", () => {
     const lastCompletedAt = "2026-04-10T00:00:00.000Z";
-    const almostDue = Date.parse(lastCompletedAt) + AUTOMATIC_ARTIFACT_SYNC_INTERVAL_MS - 1;
-    const due = Date.parse(lastCompletedAt) + AUTOMATIC_ARTIFACT_SYNC_INTERVAL_MS;
+    const almostDue =
+      Date.parse(lastCompletedAt) + AUTOMATIC_ARTIFACT_SYNC_INTERVAL_MS - 1;
+    const due =
+      Date.parse(lastCompletedAt) + AUTOMATIC_ARTIFACT_SYNC_INTERVAL_MS;
 
     expect(isAutomaticArtifactSyncDue(lastCompletedAt, almostDue)).toBe(false);
     expect(isAutomaticArtifactSyncDue(lastCompletedAt, due)).toBe(true);
   });
 
-  it("skips automatic sync while workers are still busy", () => {
+  it("skips automatic sync while queue work is still active", () => {
     expect(
       canRunAutomaticArtifactSync(
         createQueueState({
@@ -64,6 +71,31 @@ describe("artifact sync state helpers", () => {
               priority: "realtime",
               platform: "gemini",
               status: "processing",
+              attempts: 0,
+              discoveredAt: "2026-04-17T00:00:00.000Z",
+              updatedAt: "2026-04-17T00:00:00.000Z",
+            },
+          ],
+        }),
+      ),
+    ).toBe(false);
+
+    expect(
+      canRunAutomaticArtifactSync(
+        createQueueState({
+          items: [
+            {
+              key: "gemini:2",
+              event: {
+                platform: "gemini",
+                sourceId: "2",
+                url: "https://gemini.google.com/app/2",
+                revisionFingerprint: "rev-2",
+              },
+              kind: "export",
+              priority: "realtime",
+              platform: "gemini",
+              status: "pending",
               attempts: 0,
               discoveredAt: "2026-04-17T00:00:00.000Z",
               updatedAt: "2026-04-17T00:00:00.000Z",

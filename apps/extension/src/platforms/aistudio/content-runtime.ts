@@ -6,7 +6,11 @@ import {
   extractAiStudioPayloadsFromDocument,
   extractAiStudioPromptIdFromUrl,
 } from "@aiexporter/adapters-gemini";
-import { normalizeConversationTitle, normalizeConversationUrl, type ConversationBundle } from "@aiexporter/core-schema";
+import {
+  normalizeConversationTitle,
+  normalizeConversationUrl,
+  type ConversationBundle,
+} from "@aiexporter/core-schema";
 import type { BridgeNetworkPayload } from "@aiexporter/adapter-sdk";
 import type { DebugLogLevel } from "@aiexporter/adapter-sdk";
 import { mountGoogleContentRuntime } from "../google/content-runtime";
@@ -37,26 +41,43 @@ function readCookie(name: string): string | undefined {
 }
 
 async function sha1Hex(input: string): Promise<string> {
-  const digest = await window.crypto.subtle.digest("SHA-1", new TextEncoder().encode(input));
+  const digest = await window.crypto.subtle.digest(
+    "SHA-1",
+    new TextEncoder().encode(input),
+  );
   return Array.from(new Uint8Array(digest))
     .map((value) => value.toString(16).padStart(2, "0"))
     .join("");
 }
 
 async function buildAiStudioAuthorizationHeader(): Promise<string> {
-  const sapisid = readCookie("SAPISID") ?? readCookie("__Secure-1PAPISID") ?? readCookie("__Secure-3PAPISID");
+  const sapisid =
+    readCookie("SAPISID") ??
+    readCookie("__Secure-1PAPISID") ??
+    readCookie("__Secure-3PAPISID");
   if (!sapisid) {
-    throw new Error("AI Studio auth cookies were not available in the page context.");
+    throw new Error(
+      "AI Studio auth cookies were not available in the page context.",
+    );
   }
 
   const timestamp = Math.floor(Date.now() / 1_000).toString();
-  const hash = await sha1Hex(`${timestamp} ${sapisid} ${window.location.origin}`);
+  const hash = await sha1Hex(
+    `${timestamp} ${sapisid} ${window.location.origin}`,
+  );
   return `SAPISIDHASH ${timestamp}_${hash}`;
 }
 
-async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit, timeoutMs: number): Promise<Response> {
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit,
+  timeoutMs: number,
+): Promise<Response> {
   const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(new Error(`Timed out after ${timeoutMs}ms`)), timeoutMs);
+  const timeoutId = window.setTimeout(
+    () => controller.abort(new Error(`Timed out after ${timeoutMs}ms`)),
+    timeoutMs,
+  );
 
   try {
     return await fetch(input, {
@@ -68,7 +89,9 @@ async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit, tim
   }
 }
 
-async function fetchAiStudioResolvedPromptPayload(sourceId: string): Promise<unknown> {
+async function fetchAiStudioResolvedPromptPayload(
+  sourceId: string,
+): Promise<unknown> {
   const authorization = await buildAiStudioAuthorizationHeader();
   const response = await fetchWithTimeout(
     AISTUDIO_RESOLVE_DRIVE_RESOURCE_ENDPOINT,
@@ -78,8 +101,8 @@ async function fetchAiStudioResolvedPromptPayload(sourceId: string): Promise<unk
       headers: {
         authorization,
         "content-type": "application/json+protobuf",
-      "x-goog-api-key": AISTUDIO_PUBLIC_API_KEY,
-      "x-goog-authuser": "0",
+        "x-goog-api-key": AISTUDIO_PUBLIC_API_KEY,
+        "x-goog-authuser": "0",
         "x-user-agent": "grpc-web-javascript/0.1",
       },
       body: JSON.stringify([sourceId]),
@@ -88,7 +111,9 @@ async function fetchAiStudioResolvedPromptPayload(sourceId: string): Promise<unk
   );
 
   if (!response.ok) {
-    throw new Error(`AI Studio ResolveDriveResource responded with ${response.status}.`);
+    throw new Error(
+      `AI Studio ResolveDriveResource responded with ${response.status}.`,
+    );
   }
 
   return JSON.parse(await response.text()) as unknown;
@@ -104,8 +129,8 @@ async function fetchAiStudioListPromptsPage(cursor?: string): Promise<string> {
       headers: {
         authorization,
         "content-type": "application/json+protobuf",
-      "x-goog-api-key": AISTUDIO_PUBLIC_API_KEY,
-      "x-goog-authuser": "0",
+        "x-goog-api-key": AISTUDIO_PUBLIC_API_KEY,
+        "x-goog-authuser": "0",
         "x-user-agent": "grpc-web-javascript/0.1",
       },
       body: JSON.stringify(cursor ? [null, cursor] : []),
@@ -166,7 +191,9 @@ function isLikelyTitleOnlyBundle(bundle: ConversationBundle): boolean {
   const [message] = bundle.messages;
   if (!message || message.role !== "user") return false;
   const normalizedTitle = bundle.title?.trim();
-  return Boolean(normalizedTitle) && message.markdown.trim() === normalizedTitle;
+  return (
+    Boolean(normalizedTitle) && message.markdown.trim() === normalizedTitle
+  );
 }
 
 function countImageMarkdown(markdown: string): number {
@@ -174,18 +201,129 @@ function countImageMarkdown(markdown: string): number {
 }
 
 function countDriveAttachmentLinks(markdown: string): number {
-  return markdown.match(/\[Google Drive resource [^\]]+\]\(https:\/\/drive\.google\.com\/open\?id=[^)]+\)/g)?.length ?? 0;
+  return (
+    markdown.match(
+      /\[Google Drive resource [^\]]+\]\(https:\/\/drive\.google\.com\/open\?id=[^)]+\)/g,
+    )?.length ?? 0
+  );
 }
 
 function collectImageMarkdownLines(markdown: string): string[] {
   return Array.from(new Set(markdown.match(/!\[[^\]]*]\([^)]+\)/g) ?? []));
 }
 
-function shouldAttemptAiStudioDomImageMerge(bundle: ConversationBundle): boolean {
+function extractMarkdownImageUrl(rawTarget: string): string {
+  const trimmed = rawTarget.trim();
+  const quoteIndex = trimmed.indexOf(' "');
+  return (quoteIndex >= 0 ? trimmed.slice(0, quoteIndex) : trimmed).trim();
+}
+
+function encodeBytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    const chunk = bytes.subarray(offset, offset + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
+}
+
+function inferAiStudioImageMimeType(
+  target: string,
+  response: Response,
+): string {
+  const fromHeader = response.headers
+    .get("content-type")
+    ?.split(";")[0]
+    ?.trim()
+    .toLowerCase();
+  if (fromHeader?.startsWith("image/")) {
+    return fromHeader;
+  }
+
+  const normalizedTarget = target.toLowerCase();
+  if (normalizedTarget.includes(".jpg") || normalizedTarget.includes(".jpeg"))
+    return "image/jpeg";
+  if (normalizedTarget.includes(".webp")) return "image/webp";
+  if (normalizedTarget.includes(".gif")) return "image/gif";
+  if (normalizedTarget.includes(".svg")) return "image/svg+xml";
+  return "image/png";
+}
+
+export async function materializeAiStudioDomImageMarkdown(
+  markdown: string,
+): Promise<string> {
+  const markdownImagePattern = /!\[([^\]]*)\]\(([^)\s]+(?:\s+\"[^\"]*\")?)\)/g;
+  let cursor = 0;
+  let output = "";
+  let match: RegExpExecArray | null;
+
+  while ((match = markdownImagePattern.exec(markdown)) !== null) {
+    const [fullMatch, altText = "", rawTarget = ""] = match;
+    const target = extractMarkdownImageUrl(rawTarget);
+    output += markdown.slice(cursor, match.index);
+    cursor = match.index + fullMatch.length;
+
+    if (target.startsWith("data:")) {
+      output += fullMatch;
+      continue;
+    }
+
+    if (!/^https?:\/\//i.test(target) && !/^blob:/i.test(target)) {
+      output += fullMatch;
+      continue;
+    }
+
+    try {
+      const response = await fetch(
+        target,
+        /^https?:\/\//i.test(target)
+          ? {
+              credentials: "include",
+            }
+          : undefined,
+      );
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const mimeType = inferAiStudioImageMimeType(target, response);
+      const buffer = await response.arrayBuffer();
+      output += `![${altText}](data:${mimeType};base64,${encodeBytesToBase64(new Uint8Array(buffer))})`;
+      continue;
+    } catch {
+      output += fullMatch;
+    }
+  }
+
+  output += markdown.slice(cursor);
+  return output;
+}
+
+async function materializeAiStudioDomImageBundle(
+  bundle: ConversationBundle,
+): Promise<ConversationBundle> {
+  return {
+    ...bundle,
+    messages: await Promise.all(
+      bundle.messages.map(async (message) => ({
+        ...message,
+        markdown: await materializeAiStudioDomImageMarkdown(message.markdown),
+      })),
+    ),
+  };
+}
+
+function shouldAttemptAiStudioDomImageMerge(
+  bundle: ConversationBundle,
+): boolean {
   return bundle.messages.some((message) => {
     const driveAttachmentCount = countDriveAttachmentLinks(message.markdown);
     if (driveAttachmentCount === 0) return false;
-    return countImageMarkdown(message.markdown) < Math.min(driveAttachmentCount, AISTUDIO_DOM_IMAGE_MERGE_LIMIT);
+    return (
+      countImageMarkdown(message.markdown) <
+      Math.min(driveAttachmentCount, AISTUDIO_DOM_IMAGE_MERGE_LIMIT)
+    );
   });
 }
 
@@ -193,7 +331,9 @@ function mergeAiStudioDomImages(
   rpcBundle: ConversationBundle,
   domBundle: ConversationBundle,
 ): ConversationBundle {
-  const domMessagesById = new Map(domBundle.messages.map((message) => [message.id, message]));
+  const domMessagesById = new Map(
+    domBundle.messages.map((message) => [message.id, message]),
+  );
   let mergedImages = 0;
 
   const messages = rpcBundle.messages.map((message) => {
@@ -219,13 +359,18 @@ function mergeAiStudioDomImages(
     messages,
     meta: {
       ...(rpcBundle.meta ?? {}),
-      source: mergedImages > 0 ? "resolve-drive-resource+dom-image-merge" : rpcBundle.meta?.source,
+      source:
+        mergedImages > 0
+          ? "resolve-drive-resource+dom-image-merge"
+          : rpcBundle.meta?.source,
       domMergedImageCount: mergedImages,
     },
   };
 }
 
-async function extractCurrentAiStudioConversation(log: RuntimeLogger): Promise<ConversationBundle> {
+async function extractCurrentAiStudioConversation(
+  log: RuntimeLogger,
+): Promise<ConversationBundle> {
   const normalizedUrl = normalizeConversationUrl(window.location.href);
   const sourceId = extractAiStudioPromptIdFromUrl(normalizedUrl);
   if (!sourceId) {
@@ -233,47 +378,88 @@ async function extractCurrentAiStudioConversation(log: RuntimeLogger): Promise<C
   }
 
   try {
-    await log("debug", "Attempting AI Studio ResolveDriveResource extraction.", {
-      code: "extract.rpc_started",
-      sourceId,
-      url: normalizedUrl,
-    });
-    const payload = await fetchAiStudioResolvedPromptPayload(sourceId);
-    let bundle = extractAiStudioConversationFromResolvedPromptPayload(payload, normalizedUrl, sourceId);
-    if (shouldAttemptAiStudioDomImageMerge(bundle)) {
-      await log("debug", "Attempting AI Studio DOM image merge for deferred attachments.", {
-        code: "extract.dom_image_merge_started",
+    await log(
+      "debug",
+      "Attempting AI Studio ResolveDriveResource extraction.",
+      {
+        code: "extract.rpc_started",
         sourceId,
-      });
+        url: normalizedUrl,
+      },
+    );
+    const payload = await fetchAiStudioResolvedPromptPayload(sourceId);
+    let bundle = extractAiStudioConversationFromResolvedPromptPayload(
+      payload,
+      normalizedUrl,
+      sourceId,
+    );
+    if (shouldAttemptAiStudioDomImageMerge(bundle)) {
+      await log(
+        "debug",
+        "Attempting AI Studio DOM image merge for deferred attachments.",
+        {
+          code: "extract.dom_image_merge_started",
+          sourceId,
+        },
+      );
       try {
-        const domBundle = await extractAiStudioConversationFromDom(document, normalizedUrl, sourceId);
-        bundle = mergeAiStudioDomImages(bundle, domBundle);
-        await log("info", "Merged AI Studio DOM images into ResolveDriveResource export.", {
-          code: "extract.dom_image_merge_success",
+        const domBundle = await extractAiStudioConversationFromDom(
+          document,
+          normalizedUrl,
           sourceId,
-          mergedImageCount: bundle.meta?.domMergedImageCount,
-        });
+        );
+        bundle = mergeAiStudioDomImages(
+          bundle,
+          await materializeAiStudioDomImageBundle(domBundle),
+        );
+        await log(
+          "info",
+          "Merged AI Studio DOM images into ResolveDriveResource export.",
+          {
+            code: "extract.dom_image_merge_success",
+            sourceId,
+            mergedImageCount: bundle.meta?.domMergedImageCount,
+          },
+        );
       } catch (error) {
-        await log("warn", "AI Studio DOM image merge failed, keeping RPC-only export.", {
-          code: "extract.dom_image_merge_failed",
-          sourceId,
-          error: error instanceof Error ? error.message : "AI Studio DOM image merge failed",
-        });
+        await log(
+          "warn",
+          "AI Studio DOM image merge failed, keeping RPC-only export.",
+          {
+            code: "extract.dom_image_merge_failed",
+            sourceId,
+            error:
+              error instanceof Error
+                ? error.message
+                : "AI Studio DOM image merge failed",
+          },
+        );
       }
     }
-    await log("info", "Extracted AI Studio conversation via ResolveDriveResource.", {
-      code: "extract.rpc_success",
-      sourceId,
-      messageCount: bundle.messages.length,
-      hasImages: bundle.meta?.hasImages,
-    });
+    await log(
+      "info",
+      "Extracted AI Studio conversation via ResolveDriveResource.",
+      {
+        code: "extract.rpc_success",
+        sourceId,
+        messageCount: bundle.messages.length,
+        hasImages: bundle.meta?.hasImages,
+      },
+    );
     return bundle;
   } catch (error) {
-    await log("warn", "AI Studio ResolveDriveResource extraction failed, falling back to DOM.", {
-      code: "extract.rpc_failed",
-      sourceId,
-        error: error instanceof Error ? error.message : "AI Studio ResolveDriveResource extraction failed",
-    });
+    await log(
+      "warn",
+      "AI Studio ResolveDriveResource extraction failed, falling back to DOM.",
+      {
+        code: "extract.rpc_failed",
+        sourceId,
+        error:
+          error instanceof Error
+            ? error.message
+            : "AI Studio ResolveDriveResource extraction failed",
+      },
+    );
   }
 
   await log("info", "Falling back to AI Studio DOM extraction.", {
@@ -286,23 +472,30 @@ async function extractCurrentAiStudioConversation(log: RuntimeLogger): Promise<C
     window,
     location,
   });
+  const materializedBundle = await materializeAiStudioDomImageBundle(bundle);
   if (isLikelyTitleOnlyBundle(bundle)) {
-    await log("warn", "AI Studio DOM extraction fell back to a title-only bundle.", {
-      code: "extract.dom_title_only",
-      sourceId,
-      title: bundle.title,
-    });
+    await log(
+      "warn",
+      "AI Studio DOM extraction fell back to a title-only bundle.",
+      {
+        code: "extract.dom_title_only",
+        sourceId,
+        title: materializedBundle.title,
+      },
+    );
   } else {
     await log("info", "Extracted AI Studio conversation via DOM fallback.", {
       code: "extract.dom_success",
       sourceId,
-      messageCount: bundle.messages.length,
+      messageCount: materializedBundle.messages.length,
     });
   }
-  return bundle;
+  return materializedBundle;
 }
 
-export async function mountAiStudioContentRuntime(log: RuntimeLogger): Promise<void> {
+export async function mountAiStudioContentRuntime(
+  log: RuntimeLogger,
+): Promise<void> {
   await mountGoogleContentRuntime(
     {
       platform: "aistudio",
@@ -320,10 +513,13 @@ export async function mountAiStudioContentRuntime(log: RuntimeLogger): Promise<v
       historySweepMaxSteps: 36,
       historySweepSettleMs: 350,
       historySweepStableRounds: 2,
-      collectHistoryPayloadsApi: (runtimeLog, options) => collectAiStudioHistoryViaApi(runtimeLog, options),
+      collectHistoryPayloadsApi: (runtimeLog, options) =>
+        collectAiStudioHistoryViaApi(runtimeLog, options),
       extractSourceId: extractAiStudioPromptIdFromUrl,
       resolveTitle: (document) =>
-        normalizeConversationTitle(document.title.replace(/\s*\|\s*Google AI Studio\s*$/i, "").trim()) || undefined,
+        normalizeConversationTitle(
+          document.title.replace(/\s*\|\s*Google AI Studio\s*$/i, "").trim(),
+        ) || undefined,
       collectHistoryPayloads: extractAiStudioPayloadsFromDocument,
       extractCurrentConversation: () => extractCurrentAiStudioConversation(log),
     },
