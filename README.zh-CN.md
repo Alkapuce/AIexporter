@@ -128,7 +128,7 @@ corepack pnpm dev:server
 
 ```bash
 # 克隆仓库
-git clone https://github.com/<your-username>/aiexporter.git
+git clone https://github.com/Alkapuce/AIexporter.git
 cd aiexporter
 
 # 启用 Corepack（如未启用）
