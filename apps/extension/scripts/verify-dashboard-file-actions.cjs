@@ -88,14 +88,10 @@ function readExpectedDashboardScript() {
 }
 
 function getPowerShellJson(script) {
-  const output = execFileSync(
-    "pwsh",
-    ["-NoProfile", "-Command", script],
-    {
-      encoding: "utf8",
-      windowsHide: true,
-    },
-  ).trim();
+  const output = execFileSync("pwsh", ["-NoProfile", "-Command", script], {
+    encoding: "utf8",
+    windowsHide: true,
+  }).trim();
 
   return output ? JSON.parse(output) : null;
 }
@@ -288,8 +284,9 @@ async function main() {
     throw new Error(`Open-file did not surface a Notepad window for ${openFileName}`);
   }
 
-  const explorerState = await waitFor(() =>
-    getPowerShellJson(`
+  const explorerState = await waitFor(
+    () =>
+      getPowerShellJson(`
       $shell = New-Object -ComObject Shell.Application
       $windows = @($shell.Windows())
       $match = foreach ($window in $windows) {

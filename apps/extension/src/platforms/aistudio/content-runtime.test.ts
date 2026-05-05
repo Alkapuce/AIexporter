@@ -19,31 +19,26 @@ describe("materializeAiStudioDomImageMarkdown", () => {
   });
 
   it("converts AI Studio blob image markdown into data URLs before persistence", async () => {
-    const { materializeAiStudioDomImageMarkdown } =
-      await import("./content-runtime");
+    const { materializeAiStudioDomImageMarkdown } = await import("./content-runtime");
 
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
         ok: true,
         headers: {
-          get: (name: string) =>
-            name.toLowerCase() === "content-type" ? "image/png" : null,
+          get: (name: string) => (name.toLowerCase() === "content-type" ? "image/png" : null),
         },
         arrayBuffer: async () => Uint8Array.from([1, 2, 3, 4]).buffer,
       }),
     );
 
     await expect(
-      materializeAiStudioDomImageMarkdown(
-        "![splashes_1.7.10.htm](blob:https://aistudio.google.com/blob-123)",
-      ),
+      materializeAiStudioDomImageMarkdown("![splashes_1.7.10.htm](blob:https://aistudio.google.com/blob-123)"),
     ).resolves.toBe("![splashes_1.7.10.htm](data:image/png;base64,AQIDBA==)");
   });
 
   it("keeps concurrent markdown image rewrites isolated", async () => {
-    const { materializeAiStudioDomImageMarkdown } =
-      await import("./content-runtime");
+    const { materializeAiStudioDomImageMarkdown } = await import("./content-runtime");
     let resolveFirstFetch:
       | ((response: {
           ok: true;
@@ -58,13 +53,10 @@ describe("materializeAiStudioDomImageMarkdown", () => {
         const response = {
           ok: true as const,
           headers: {
-            get: (name: string) =>
-              name.toLowerCase() === "content-type" ? "image/png" : null,
+            get: (name: string) => (name.toLowerCase() === "content-type" ? "image/png" : null),
           },
           arrayBuffer: async () =>
-            Uint8Array.from([
-              target.includes("one-b") ? 2 : target.includes("two-a") ? 3 : 1,
-            ]).buffer,
+            Uint8Array.from([target.includes("one-b") ? 2 : target.includes("two-a") ? 3 : 1]).buffer,
         };
         if (target.includes("one-a")) {
           return new Promise((resolve) => {
@@ -80,18 +72,13 @@ describe("materializeAiStudioDomImageMarkdown", () => {
     );
     await Promise.resolve();
 
-    const second = materializeAiStudioDomImageMarkdown(
-      "second ![two-a](blob:https://aistudio.google.com/two-a)",
-    );
-    await expect(second).resolves.toBe(
-      "second ![two-a](data:image/png;base64,Aw==)",
-    );
+    const second = materializeAiStudioDomImageMarkdown("second ![two-a](blob:https://aistudio.google.com/two-a)");
+    await expect(second).resolves.toBe("second ![two-a](data:image/png;base64,Aw==)");
 
     resolveFirstFetch?.({
       ok: true,
       headers: {
-        get: (name: string) =>
-          name.toLowerCase() === "content-type" ? "image/png" : null,
+        get: (name: string) => (name.toLowerCase() === "content-type" ? "image/png" : null),
       },
       arrayBuffer: async () => Uint8Array.from([1]).buffer,
     });

@@ -57,7 +57,10 @@ function enqueueSerializedMutation<T>(
   return nextTask;
 }
 
-function normalizePlatformConfig(raw: Partial<PlatformRuntimeConfig> | undefined, fallback: PlatformRuntimeConfig): PlatformRuntimeConfig {
+function normalizePlatformConfig(
+  raw: Partial<PlatformRuntimeConfig> | undefined,
+  fallback: PlatformRuntimeConfig,
+): PlatformRuntimeConfig {
   return {
     ...fallback,
     ...(raw ?? {}),
@@ -65,7 +68,10 @@ function normalizePlatformConfig(raw: Partial<PlatformRuntimeConfig> | undefined
   };
 }
 
-function normalizeService(raw: Partial<PlatformServiceState> | undefined, fallback: PlatformServiceState): PlatformServiceState {
+function normalizeService(
+  raw: Partial<PlatformServiceState> | undefined,
+  fallback: PlatformServiceState,
+): PlatformServiceState {
   return {
     ...fallback,
     ...(raw ?? {}),
@@ -122,10 +128,22 @@ function normalizeState(raw: unknown): QueueState {
             : DEFAULT_EXTENSION_SETTINGS.downloads.archiveRetentionDays,
       },
       platforms: {
-        chatgpt: normalizePlatformConfig(candidate?.settings?.platforms?.chatgpt, DEFAULT_EXTENSION_SETTINGS.platforms.chatgpt),
-        gemini: normalizePlatformConfig(candidate?.settings?.platforms?.gemini, DEFAULT_EXTENSION_SETTINGS.platforms.gemini),
-        aistudio: normalizePlatformConfig(candidate?.settings?.platforms?.aistudio, DEFAULT_EXTENSION_SETTINGS.platforms.aistudio),
-        deepseek: normalizePlatformConfig(candidate?.settings?.platforms?.deepseek, DEFAULT_EXTENSION_SETTINGS.platforms.deepseek),
+        chatgpt: normalizePlatformConfig(
+          candidate?.settings?.platforms?.chatgpt,
+          DEFAULT_EXTENSION_SETTINGS.platforms.chatgpt,
+        ),
+        gemini: normalizePlatformConfig(
+          candidate?.settings?.platforms?.gemini,
+          DEFAULT_EXTENSION_SETTINGS.platforms.gemini,
+        ),
+        aistudio: normalizePlatformConfig(
+          candidate?.settings?.platforms?.aistudio,
+          DEFAULT_EXTENSION_SETTINGS.platforms.aistudio,
+        ),
+        deepseek: normalizePlatformConfig(
+          candidate?.settings?.platforms?.deepseek,
+          DEFAULT_EXTENSION_SETTINGS.platforms.deepseek,
+        ),
       },
     },
     lastProcessedAt: candidate?.lastProcessedAt,
@@ -148,8 +166,7 @@ function normalizeConversationIndex(raw: unknown): ConversationIndexEntry[] {
   if (!Array.isArray(raw)) return DEFAULT_CONVERSATION_INDEX;
   return (raw as Array<ConversationIndexEntry & { latestExporterVersion?: string }>).map((entry) => ({
     ...entry,
-    latestExportCompatibilityVersion:
-      entry.latestExportCompatibilityVersion ?? entry.latestExporterVersion,
+    latestExportCompatibilityVersion: entry.latestExportCompatibilityVersion ?? entry.latestExporterVersion,
   }));
 }
 

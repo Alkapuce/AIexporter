@@ -65,11 +65,7 @@ export function isReceiverUnavailableError(error: unknown): boolean {
   );
 }
 
-export async function waitForWorkerReady(
-  tabId: number,
-  expectedUrl: string,
-  timeoutMs: number,
-): Promise<void> {
+export async function waitForWorkerReady(tabId: number, expectedUrl: string, timeoutMs: number): Promise<void> {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
     const tab = await browser.tabs.get(tabId);
@@ -147,7 +143,10 @@ export function isChallengeLikeTab(tab: browser.tabs.Tab): boolean {
   );
 }
 
-export async function closeWorkerTab(tabId: number | undefined, intentionalWorkerTabClosures: Set<number>): Promise<void> {
+export async function closeWorkerTab(
+  tabId: number | undefined,
+  intentionalWorkerTabClosures: Set<number>,
+): Promise<void> {
   if (typeof tabId !== "number") return;
 
   intentionalWorkerTabClosures.add(tabId);

@@ -1,9 +1,22 @@
 import { AIEXPORTER_EXPORT_COMPATIBILITY_VERSION, type QueueState, type RuntimeMessage } from "@aiexporter/adapter-sdk";
 import type { SourcePlatform } from "@aiexporter/core-schema";
-import { clearHistoricalItems, clearItemsByStatuses, markQueueItemStatus, mergeDiscoveryEvent, patchQueueItem, removeQueueItem, retryFailedItems } from "../runtime/queue";
+import {
+  clearHistoricalItems,
+  clearItemsByStatuses,
+  markQueueItemStatus,
+  mergeDiscoveryEvent,
+  patchQueueItem,
+  removeQueueItem,
+  retryFailedItems,
+} from "../runtime/queue";
 import { downloadTextAsset } from "../runtime/downloads";
 import { flushBufferedBackgroundLogs, writeBackgroundLog } from "../runtime/logger";
-import { pickFolderWithNativeHost, pingNativeHost, resolveExportRootWithNativeHost, writeFileWithNativeHost } from "../runtime/native-host";
+import {
+  pickFolderWithNativeHost,
+  pingNativeHost,
+  resolveExportRootWithNativeHost,
+  writeFileWithNativeHost,
+} from "../runtime/native-host";
 import { loadDebugState, loadQueueState, updateConversationIndex, clearDebugState } from "../runtime/storage";
 import { markConversationIndexExportResult, upsertConversationIndexEntry } from "../runtime/indexes";
 import { openLatestArtifact, persistBundle, showLatestArtifactFolder } from "./artifact-persistence";
@@ -185,12 +198,17 @@ async function exportDebugSnapshot(deps: BackgroundRuntimeRouterDeps) {
     if (getConfiguredExportRoot(queueState.settings)) {
       throw error instanceof Error ? error : new Error(String(error));
     }
-    await deps.writeBackgroundLog("background.debug", "warn", "Native-host dashboard log export failed, falling back to downloads API.", {
-      code: "debug.export_native_host_failed",
-      error: error instanceof Error ? error.message : "Native-host dashboard log export failed.",
-      relativePath,
-      logCount: debugState.logs.length,
-    });
+    await deps.writeBackgroundLog(
+      "background.debug",
+      "warn",
+      "Native-host dashboard log export failed, falling back to downloads API.",
+      {
+        code: "debug.export_native_host_failed",
+        error: error instanceof Error ? error.message : "Native-host dashboard log export failed.",
+        relativePath,
+        logCount: debugState.logs.length,
+      },
+    );
   }
 
   const downloaded = await deps.downloadTextAsset(relativePath, payload, "application/json");
@@ -300,7 +318,7 @@ async function discoverAndExportItem(
         result.revision,
         "exported",
         AIEXPORTER_EXPORT_COMPATIBILITY_VERSION,
-        );
+      );
       return next;
     });
     await deps.updateQueueStateWithDerived((current) => ({
@@ -327,7 +345,9 @@ async function discoverAndExportItem(
     }));
     throw error;
   } finally {
-    await browser.tabs.remove(tabId).catch(() => undefined);
+    await browser.tabs.remove(tabId).catch(() => {
+      /* tab already closed */
+    });
   }
 }
 
@@ -347,7 +367,8 @@ function createRuntimeMessageHandlers(
         await deps.updateQueueStateWithDerived((current) => ({
           ...current,
           items: result.requeueEvents.reduce(
-            (items, event) => mergeDiscoveryEvent(items, event, { kind: "export", priority: "retry", forcePending: true }),
+            (items, event) =>
+              mergeDiscoveryEvent(items, event, { kind: "export", priority: "retry", forcePending: true }),
             current.items,
           ),
         }));
@@ -356,15 +377,20 @@ function createRuntimeMessageHandlers(
       (message.platform ? [message.platform] : SUPPORTED_PLATFORMS).forEach((platform) => {
         serviceRuntime.requestPlatformTick(platform);
       });
-      await deps.writeBackgroundLog("background.artifact", "info", "Synchronized artifact index with local export files.", {
-        code: "artifact.sync_completed",
-        platform: message.platform,
-        exportRoot: result.exportRoot,
-        verifiedCount: result.verifiedCount,
-        missingCount: result.missingCount,
-        importedCount: result.importedCount,
-        requeued: result.requeueEvents.length,
-      });
+      await deps.writeBackgroundLog(
+        "background.artifact",
+        "info",
+        "Synchronized artifact index with local export files.",
+        {
+          code: "artifact.sync_completed",
+          platform: message.platform,
+          exportRoot: result.exportRoot,
+          verifiedCount: result.verifiedCount,
+          missingCount: result.missingCount,
+          importedCount: result.importedCount,
+          requeued: result.requeueEvents.length,
+        },
+      );
       return {
         ok: true,
         ...result,

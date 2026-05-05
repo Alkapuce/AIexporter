@@ -23,13 +23,7 @@ export function useThemeTokens(themeMode: ThemeMode): ThemeTokens {
   return theme;
 }
 
-export function ThemeProvider({
-  themeMode,
-  children,
-}: {
-  themeMode: ThemeMode;
-  children: ReactNode;
-}) {
+export function ThemeProvider({ themeMode, children }: { themeMode: ThemeMode; children: ReactNode }) {
   const theme = useThemeTokens(themeMode);
 
   return <themeContext.Provider value={theme}>{children}</themeContext.Provider>;
@@ -38,4 +32,3 @@ export function ThemeProvider({
 export function useThemeContext(): ThemeTokens {
   return useContext(themeContext);
 }
-

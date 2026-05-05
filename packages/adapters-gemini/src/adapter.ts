@@ -104,7 +104,8 @@ interface GeminiRpcLinkedAttachment {
 }
 
 function getGeminiAttachmentKey(attachment: GeminiRpcImageAttachment | GeminiRpcLinkedAttachment): string {
-  const title = (attachment as GeminiRpcImageAttachment).filename ?? (attachment as GeminiRpcLinkedAttachment).title ?? "";
+  const title =
+    (attachment as GeminiRpcImageAttachment).filename ?? (attachment as GeminiRpcLinkedAttachment).title ?? "";
   return `${title.trim()}::${attachment.url.trim()}`;
 }
 
@@ -143,9 +144,13 @@ function collectGeminiImageAttachments(root: unknown, collector: GeminiRpcImageA
   if (!Array.isArray(root)) return;
 
   if (isGeminiImageAttachmentCandidate(root)) {
-    const url = root.find((item): item is string => typeof item === "string" && /^https:\/\/lh3\.googleusercontent\.com\/gg\//.test(item));
+    const url = root.find(
+      (item): item is string => typeof item === "string" && /^https:\/\/lh3\.googleusercontent\.com\/gg\//.test(item),
+    );
     if (url) {
-      const filename = root.find((item): item is string => typeof item === "string" && /\.(png|jpe?g|webp|gif|bmp)$/i.test(item));
+      const filename = root.find(
+        (item): item is string => typeof item === "string" && /\.(png|jpe?g|webp|gif|bmp)$/i.test(item),
+      );
       const mimeType = root.find((item): item is string => typeof item === "string" && /^image\//i.test(item));
       collector.push({ url, filename, mimeType });
       return;
@@ -182,8 +187,12 @@ function collectGeminiDocumentAttachments(root: unknown, collector: GeminiRpcLin
   if (isGeminiDocumentAttachmentCandidate(root)) {
     const url = root.find((item): item is string => typeof item === "string" && /^https?:\/\//i.test(item));
     if (url) {
-      const title = root.find((item): item is string => typeof item === "string" && /\.(pdf|docx?|xlsx?|pptx?|txt|csv|tsv|md)$/i.test(item));
-      const mimeType = root.find((item): item is string => typeof item === "string" && /^(application|text)\//i.test(item));
+      const title = root.find(
+        (item): item is string => typeof item === "string" && /\.(pdf|docx?|xlsx?|pptx?|txt|csv|tsv|md)$/i.test(item),
+      );
+      const mimeType = root.find(
+        (item): item is string => typeof item === "string" && /^(application|text)\//i.test(item),
+      );
       collector.push({ url, title, mimeType });
       return;
     }
@@ -199,7 +208,9 @@ function extractGeminiDocumentAttachments(entry: unknown): GeminiRpcLinkedAttach
   collected.forEach((attachment) => {
     deduped.set(`${attachment.title ?? ""}::${attachment.url}`, attachment);
   });
-  return Array.from(deduped.values()).filter((attachment) => !/^https:\/\/lh3\.googleusercontent\.com\/gg\//.test(attachment.url));
+  return Array.from(deduped.values()).filter(
+    (attachment) => !/^https:\/\/lh3\.googleusercontent\.com\/gg\//.test(attachment.url),
+  );
 }
 
 function buildGeminiImageMarkdown(attachments: GeminiRpcImageAttachment[]): string[] {
@@ -224,7 +235,12 @@ function extractHnvQHbPayload(responseText: string): string {
   for (const chunk of chunks) {
     try {
       const parsed = JSON.parse(chunk) as unknown;
-      if (Array.isArray(parsed) && Array.isArray(parsed[0]) && parsed[0][1] === "hNvQHb" && typeof parsed[0][2] === "string") {
+      if (
+        Array.isArray(parsed) &&
+        Array.isArray(parsed[0]) &&
+        parsed[0][1] === "hNvQHb" &&
+        typeof parsed[0][2] === "string"
+      ) {
         return parsed[0][2];
       }
     } catch {
@@ -288,9 +304,10 @@ export function parseGeminiConversationFromHnvQHbResponse(
     );
     previousPromptImageAttachments = promptImageAttachments;
     previousPromptDocumentAttachments = promptDocumentAttachments;
-    const prompt = Array.isArray(entry[2]) && Array.isArray(entry[2][0]) && typeof entry[2][0][0] === "string"
-      ? entry[2][0][0].trim()
-      : "";
+    const prompt =
+      Array.isArray(entry[2]) && Array.isArray(entry[2][0]) && typeof entry[2][0][0] === "string"
+        ? entry[2][0][0].trim()
+        : "";
     const userParts = [
       ...buildGeminiImageMarkdown(effectivePromptImageAttachments),
       ...buildGeminiAttachmentMarkdown(effectivePromptDocumentAttachments),
@@ -311,7 +328,9 @@ export function parseGeminiConversationFromHnvQHbResponse(
     const assistantParts = [formatThinkingBlock(thinkingText), responseTextValue].filter(Boolean);
     if (assistantParts.length > 0) {
       const responseId =
-        Array.isArray(responseEntry) && typeof responseEntry[0] === "string" ? responseEntry[0] : `assistant-${index + 1}`;
+        Array.isArray(responseEntry) && typeof responseEntry[0] === "string"
+          ? responseEntry[0]
+          : `assistant-${index + 1}`;
       messages.push({
         id: responseId,
         role: "assistant",
@@ -325,7 +344,9 @@ export function parseGeminiConversationFromHnvQHbResponse(
     throw new Error("Gemini hNvQHb response returned no usable messages.");
   }
 
-  const sourceUpdatedAt = [...messages].reverse().find((message) => message.role === "assistant" && message.createdAt)?.createdAt;
+  const sourceUpdatedAt = [...messages]
+    .reverse()
+    .find((message) => message.role === "assistant" && message.createdAt)?.createdAt;
 
   return {
     platform: "gemini",

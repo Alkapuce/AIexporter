@@ -16,12 +16,12 @@ Built as a pnpm monorepo with a WXT-based Chromium extension, background queue o
 
 ## Supported platforms
 
-| Platform | Discovery | Export | Thinking blocks | Attachments |
-| --- | --- | --- | --- | --- |
-| ChatGPT | Network interception | Full conversation | Yes | — |
-| DeepSeek | Network + history sweep | Full conversation | Yes | — |
-| Gemini | DOM + RPC response parsing | Full conversation | Yes | Images, links |
-| AI Studio | DOM + library page sweep | Full conversation | Yes | — |
+| Platform  | Discovery                  | Export            | Thinking blocks | Attachments   |
+| --------- | -------------------------- | ----------------- | --------------- | ------------- |
+| ChatGPT   | Network interception       | Full conversation | Yes             | —             |
+| DeepSeek  | Network + history sweep    | Full conversation | Yes             | —             |
+| Gemini    | DOM + RPC response parsing | Full conversation | Yes             | Images, links |
+| AI Studio | DOM + library page sweep   | Full conversation | Yes             | —             |
 
 ## Workspace layout
 
@@ -133,12 +133,12 @@ Falls back to browser Downloads API when unavailable.
 
 The Fastify archive service provides:
 
-| Endpoint | Description |
-| --- | --- |
-| `POST /api/v1/ingest/conversations` | Ingest a conversation bundle |
-| `GET /api/v1/conversations` | List/search conversations |
-| `GET /api/v1/conversations/:platform/:sourceId` | Get a specific conversation |
-| `GET /healthz` | Health check |
+| Endpoint                                        | Description                  |
+| ----------------------------------------------- | ---------------------------- |
+| `POST /api/v1/ingest/conversations`             | Ingest a conversation bundle |
+| `GET /api/v1/conversations`                     | List/search conversations    |
+| `GET /api/v1/conversations/:platform/:sourceId` | Get a specific conversation  |
+| `GET /healthz`                                  | Health check                 |
 
 ## Dashboard
 

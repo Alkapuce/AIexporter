@@ -3,17 +3,8 @@
   "compilerOptions": {
     "jsx": "react-jsx",
     "outDir": "dist",
-    "lib": [
-      "ES2023",
-      "DOM"
-    ],
-    "types": [
-      "node",
-      "firefox-webext-browser"
-    ]
+    "lib": ["ES2023", "DOM"],
+    "types": ["node", "firefox-webext-browser"]
   },
-  "include": [
-    "entrypoints",
-    "src"
-  ]
+  "include": ["entrypoints", "src"]
 }

@@ -15,12 +15,7 @@ import {
   markConversationIndexExportResult,
   upsertConversationIndexEntry,
 } from "../runtime/indexes";
-import {
-  loadArtifactIndex,
-  loadConversationIndex,
-  saveArtifactIndex,
-  saveConversationIndex,
-} from "../runtime/storage";
+import { loadArtifactIndex, loadConversationIndex, saveArtifactIndex, saveConversationIndex } from "../runtime/storage";
 import {
   checkPathExistsWithNativeHost,
   listFilesWithNativeHost,
@@ -31,12 +26,7 @@ import {
 } from "../runtime/native-host";
 import { verifyArtifactFilesPresent } from "./artifact-persistence";
 import { getConfiguredExportRoot } from "./export-root";
-import {
-  SUPPORTED_PLATFORMS,
-  buildArchivePrefix,
-  buildArtifactBaseName,
-  sanitizePathSegment,
-} from "./shared";
+import { SUPPORTED_PLATFORMS, buildArchivePrefix, buildArtifactBaseName, sanitizePathSegment } from "./shared";
 
 export interface ArtifactSyncResult {
   exportRoot: string;
@@ -46,14 +36,9 @@ export interface ArtifactSyncResult {
   requeueEvents: DiscoveryEvent[];
 }
 
-function getBundleMetaString(
-  bundle: ConversationBundle,
-  key: string,
-): string | undefined {
+function getBundleMetaString(bundle: ConversationBundle, key: string): string | undefined {
   const value = bundle.meta?.[key];
-  return typeof value === "string" && value.trim().length > 0
-    ? value.trim()
-    : undefined;
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 }
 
 function isConversationBundle(value: unknown): value is ConversationBundle {
@@ -77,9 +62,7 @@ async function fileExists(path: string | undefined): Promise<boolean> {
   return Boolean(result.path);
 }
 
-async function buildDiscoveryEvent(
-  bundle: ConversationBundle,
-): Promise<DiscoveryEvent> {
+async function buildDiscoveryEvent(bundle: ConversationBundle): Promise<DiscoveryEvent> {
   const sourceUpdatedLabel = getBundleMetaString(bundle, "sourceUpdatedLabel");
   const resolvedTitle = resolveBundleTitle(bundle);
   return {
@@ -99,18 +82,11 @@ async function buildDiscoveryEvent(
   };
 }
 
-function getArtifactKey(
-  platform: SourcePlatform,
-  sourceId: string,
-  revision: string,
-): string {
+function getArtifactKey(platform: SourcePlatform, sourceId: string, revision: string): string {
   return JSON.stringify([platform, sourceId, revision]);
 }
 
-function getConversationKey(
-  platform: SourcePlatform,
-  sourceId: string,
-): string {
+function getConversationKey(platform: SourcePlatform, sourceId: string): string {
   return JSON.stringify([platform, sourceId]);
 }
 
@@ -123,20 +99,13 @@ function normalizeComparablePath(targetPath: string): string {
   return targetPath.replace(/\//g, "\\").replace(/\\+$/g, "").toLowerCase();
 }
 
-function isPathAtOrInside(
-  candidatePath: string,
-  directoryPath: string,
-): boolean {
+function isPathAtOrInside(candidatePath: string, directoryPath: string): boolean {
   const candidate = normalizeComparablePath(candidatePath);
   const directory = normalizeComparablePath(directoryPath);
   return candidate === directory || candidate.startsWith(`${directory}\\`);
 }
 
-function canSafelyMoveFolder(
-  sourcePath: string,
-  targetPath: string,
-  targetExists: boolean,
-): boolean {
+function canSafelyMoveFolder(sourcePath: string, targetPath: string, targetExists: boolean): boolean {
   const source = normalizeComparablePath(sourcePath);
   const target = normalizeComparablePath(targetPath);
   if (source === target) return false;
@@ -161,29 +130,18 @@ export async function syncArtifactsWithDisk(
 ): Promise<ArtifactSyncResult> {
   await pingNativeHost();
 
-  const exportRoot = (
-    await resolveExportRootWithNativeHost(getConfiguredExportRoot(settings))
-  ).path;
+  const exportRoot = (await resolveExportRootWithNativeHost(getConfiguredExportRoot(settings))).path;
   if (!exportRoot) {
     throw new Error("Failed to resolve export root.");
   }
 
-  const [artifactIndex, conversationIndex] = await Promise.all([
-    loadArtifactIndex(),
-    loadConversationIndex(),
-  ]);
-  const targetPlatforms: SourcePlatform[] = platform
-    ? [platform]
-    : SUPPORTED_PLATFORMS;
+  const [artifactIndex, conversationIndex] = await Promise.all([loadArtifactIndex(), loadConversationIndex()]);
+  const targetPlatforms: SourcePlatform[] = platform ? [platform] : SUPPORTED_PLATFORMS;
   const targetPlatformSet = new Set<SourcePlatform>(targetPlatforms);
   const artifactByKey = new Map<string, ExportArtifactEntry>();
   const artifactOrder: string[] = [];
   for (const entry of artifactIndex) {
-    const artifactKey = getArtifactKey(
-      entry.platform,
-      entry.sourceId,
-      entry.revision,
-    );
+    const artifactKey = getArtifactKey(entry.platform, entry.sourceId, entry.revision);
     if (!artifactByKey.has(artifactKey)) {
       artifactOrder.push(artifactKey);
     }
@@ -191,10 +149,7 @@ export async function syncArtifactsWithDisk(
   }
   let nextConversationIndex = [...conversationIndex];
   const conversationIndexByKey = new Map(
-    nextConversationIndex.map(
-      (entry) =>
-        [getConversationKey(entry.platform, entry.sourceId), entry] as const,
-    ),
+    nextConversationIndex.map((entry) => [getConversationKey(entry.platform, entry.sourceId), entry] as const),
   );
   let verifiedCount = 0;
   let missingCount = 0;
@@ -203,26 +158,15 @@ export async function syncArtifactsWithDisk(
   const requeueEvents = new Map<string, DiscoveryEvent>();
 
   function upsertSyncedArtifact(entry: ExportArtifactEntry): void {
-    const artifactKey = getArtifactKey(
-      entry.platform,
-      entry.sourceId,
-      entry.revision,
-    );
+    const artifactKey = getArtifactKey(entry.platform, entry.sourceId, entry.revision);
     if (!artifactByKey.has(artifactKey)) {
       artifactOrder.unshift(artifactKey);
     }
     artifactByKey.set(artifactKey, entry);
   }
 
-  function patchSyncedArtifact(
-    entry: ExportArtifactEntry,
-    patch: Partial<ExportArtifactEntry>,
-  ): void {
-    const artifactKey = getArtifactKey(
-      entry.platform,
-      entry.sourceId,
-      entry.revision,
-    );
+  function patchSyncedArtifact(entry: ExportArtifactEntry, patch: Partial<ExportArtifactEntry>): void {
+    const artifactKey = getArtifactKey(entry.platform, entry.sourceId, entry.revision);
     const current = artifactByKey.get(artifactKey);
     if (!current) return;
     artifactByKey.set(artifactKey, {
@@ -232,11 +176,7 @@ export async function syncArtifactsWithDisk(
   }
 
   function recordMissingArtifact(entry: ExportArtifactEntry): void {
-    const artifactKey = getArtifactKey(
-      entry.platform,
-      entry.sourceId,
-      entry.revision,
-    );
+    const artifactKey = getArtifactKey(entry.platform, entry.sourceId, entry.revision);
     if (!missingArtifactKeys.has(artifactKey)) {
       missingArtifactKeys.add(artifactKey);
       missingCount += 1;
@@ -244,16 +184,12 @@ export async function syncArtifactsWithDisk(
   }
 
   for (const entry of artifactIndex) {
-    if (!targetPlatformSet.has(entry.platform) || isInactiveArtifact(entry))
-      continue;
+    if (!targetPlatformSet.has(entry.platform) || isInactiveArtifact(entry)) continue;
     verifiedCount += 1;
     const present = await verifyArtifactFilesPresent(entry);
     if (present) {
       patchSyncedArtifact(entry, {
-        localStatus:
-          entry.localStatus === "skipped_existing"
-            ? "skipped_existing"
-            : "present",
+        localStatus: entry.localStatus === "skipped_existing" ? "skipped_existing" : "present",
       });
       continue;
     }
@@ -264,18 +200,11 @@ export async function syncArtifactsWithDisk(
       isLatestForConversation: false,
     });
 
-    const conversationEntry = conversationIndexByKey.get(
-      getConversationKey(entry.platform, entry.sourceId),
-    );
+    const conversationEntry = conversationIndexByKey.get(getConversationKey(entry.platform, entry.sourceId));
     const missingLatestArtifact =
-      entry.isLatestForConversation ||
-      conversationEntry?.latestExportRevision === entry.revision;
+      entry.isLatestForConversation || conversationEntry?.latestExportRevision === entry.revision;
     if (conversationEntry && missingLatestArtifact) {
-      nextConversationIndex = markConversationIndexExportPending(
-        nextConversationIndex,
-        entry.platform,
-        entry.sourceId,
-      );
+      nextConversationIndex = markConversationIndexExportPending(nextConversationIndex, entry.platform, entry.sourceId);
       requeueEvents.set(getConversationKey(entry.platform, entry.sourceId), {
         platform: entry.platform,
         sourceId: entry.sourceId,
@@ -290,9 +219,7 @@ export async function syncArtifactsWithDisk(
 
   for (const nextPlatform of targetPlatforms) {
     const platformRoot = `${exportRoot}\\AIexporter\\${sanitizePathSegment(nextPlatform)}`;
-    const bundlePaths =
-      (await listFilesWithNativeHost(platformRoot, "*.bundle.json", true))
-        .paths ?? [];
+    const bundlePaths = (await listFilesWithNativeHost(platformRoot, "*.bundle.json", true)).paths ?? [];
 
     for (const bundlePath of bundlePaths) {
       try {
@@ -302,23 +229,15 @@ export async function syncArtifactsWithDisk(
         if (!isConversationBundle(parsed)) continue;
 
         const bundle = parsed;
-        if (
-          !isSupportedPlatform(bundle.platform) ||
-          !targetPlatformSet.has(bundle.platform)
-        ) {
+        if (!isSupportedPlatform(bundle.platform) || !targetPlatformSet.has(bundle.platform)) {
           continue;
         }
 
-        const revision =
-          getBundleMetaString(bundle, "revision") ??
-          (await buildBundleRevision(bundle));
+        const revision = getBundleMetaString(bundle, "revision") ?? (await buildBundleRevision(bundle));
         const desiredPrefix = `${exportRoot}\\${buildArchivePrefix(bundle, revision).replace(/\//g, "\\")}`;
         const currentFolder = getParentDirectory(bundlePath);
         let nextBundlePath = bundlePath;
-        let nextMarkdownFilename = bundlePath.replace(
-          /\.bundle\.json$/i,
-          ".md",
-        );
+        let nextMarkdownFilename = bundlePath.replace(/\.bundle\.json$/i, ".md");
         if (currentFolder.toLowerCase() !== desiredPrefix.toLowerCase()) {
           const targetExists = await fileExists(desiredPrefix);
           if (canSafelyMoveFolder(currentFolder, desiredPrefix, targetExists)) {
@@ -341,11 +260,7 @@ export async function syncArtifactsWithDisk(
           isLatestForConversation: true,
         };
 
-        const artifactKey = getArtifactKey(
-          bundle.platform,
-          bundle.sourceId,
-          revision,
-        );
+        const artifactKey = getArtifactKey(bundle.platform, bundle.sourceId, revision);
         if (!artifactByKey.has(artifactKey)) {
           importedCount += 1;
         }
@@ -369,14 +284,9 @@ export async function syncArtifactsWithDisk(
 
         if (!markdownPresent) {
           recordMissingArtifact(artifactEntry);
-          requeueEvents.set(
-            getConversationKey(bundle.platform, bundle.sourceId),
-            discoveryEvent,
-          );
+          requeueEvents.set(getConversationKey(bundle.platform, bundle.sourceId), discoveryEvent);
         } else {
-          requeueEvents.delete(
-            getConversationKey(bundle.platform, bundle.sourceId),
-          );
+          requeueEvents.delete(getConversationKey(bundle.platform, bundle.sourceId));
         }
       } catch {
         // Ignore unreadable bundle files during sync.
@@ -384,13 +294,9 @@ export async function syncArtifactsWithDisk(
     }
   }
 
-  const latestRevisionByConversation = new Map<
-    string,
-    { exportedAt: number; revision: string }
-  >();
+  const latestRevisionByConversation = new Map<string, { exportedAt: number; revision: string }>();
   for (const entry of artifactByKey.values()) {
-    if (!targetPlatformSet.has(entry.platform) || isInactiveArtifact(entry))
-      continue;
+    if (!targetPlatformSet.has(entry.platform) || isInactiveArtifact(entry)) continue;
     const conversationKey = getConversationKey(entry.platform, entry.sourceId);
     const currentLatest = latestRevisionByConversation.get(conversationKey);
     const exportedAt = parseExportedAt(entry.exportedAt);
@@ -405,9 +311,7 @@ export async function syncArtifactsWithDisk(
   const nextArtifacts = artifactOrder.map((artifactKey) => {
     const entry = artifactByKey.get(artifactKey)!;
     if (!targetPlatformSet.has(entry.platform)) return entry;
-    const latest = latestRevisionByConversation.get(
-      getConversationKey(entry.platform, entry.sourceId),
-    );
+    const latest = latestRevisionByConversation.get(getConversationKey(entry.platform, entry.sourceId));
     return {
       ...entry,
       isLatestForConversation: latest?.revision === entry.revision,
@@ -418,8 +322,7 @@ export async function syncArtifactsWithDisk(
     const latestArtifact = nextArtifacts.find(
       (entry) =>
         targetPlatformSet.has(entry.platform) &&
-        getConversationKey(entry.platform, entry.sourceId) ===
-          conversationKey &&
+        getConversationKey(entry.platform, entry.sourceId) === conversationKey &&
         entry.isLatestForConversation,
     );
     if (latestArtifact && latestArtifact.localStatus !== "missing") {
@@ -427,10 +330,7 @@ export async function syncArtifactsWithDisk(
     }
   }
 
-  await Promise.all([
-    saveArtifactIndex(nextArtifacts),
-    saveConversationIndex(nextConversationIndex),
-  ]);
+  await Promise.all([saveArtifactIndex(nextArtifacts), saveConversationIndex(nextConversationIndex)]);
 
   return {
     exportRoot,

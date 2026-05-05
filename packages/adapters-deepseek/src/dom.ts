@@ -1,11 +1,6 @@
 import { normalizeConversationTitle } from "@aiexporter/core-schema";
+import { sanitizeClone } from "@aiexporter/adapter-sdk";
 import { createMarkdownConverter } from "./turndown";
-
-function sanitizeClone(element: HTMLElement): HTMLElement {
-  const clone = element.cloneNode(true) as HTMLElement;
-  clone.querySelectorAll("button, svg, script, style, textarea").forEach((node) => node.remove());
-  return clone;
-}
 
 function collectAttachmentCards(node: HTMLElement): Array<{ name: string; meta?: string }> {
   const cards: Array<{ name: string; meta?: string }> = [];
@@ -15,8 +10,9 @@ function collectAttachmentCards(node: HTMLElement): Array<{ name: string; meta?:
       candidate.querySelector<HTMLElement>(".f3a54b52")?.textContent?.trim() ??
       candidate.querySelector<HTMLElement>("[class*='title']")?.textContent?.trim();
     const meta =
-      candidate.querySelector<HTMLElement>("._5119742, .dc832104, [class*='meta'], [class*='size']")?.textContent?.trim() ??
-      undefined;
+      candidate
+        .querySelector<HTMLElement>("._5119742, .dc832104, [class*='meta'], [class*='size']")
+        ?.textContent?.trim() ?? undefined;
     if (!name || name.length > 260) return;
     if (!/\.(pdf|png|jpe?g|gif|webp|bmp|svg|docx?|pptx?|xlsx?|csv|tsv|md|txt)$/i.test(name)) return;
     const key = `${name}::${meta ?? ""}`;
@@ -91,9 +87,11 @@ export function extractConversationFromDom(document: Document): {
   const messages = collectMessageContainers(document)
     .map((node, index) => {
       const contentRoot =
-        node.querySelector<HTMLElement>(".ds-markdown, .markdown, [class*='markdown'], [class*='message-content']") ?? node;
+        node.querySelector<HTMLElement>(".ds-markdown, .markdown, [class*='markdown'], [class*='message-content']") ??
+        node;
       const attachmentBlocks = buildAttachmentMarkdown(collectAttachmentCards(node));
-      const textMarkdown = converter.turndown(sanitizeClone(contentRoot)).trim() || contentRoot.textContent?.trim() || "";
+      const textMarkdown =
+        converter.turndown(sanitizeClone(contentRoot)).trim() || contentRoot.textContent?.trim() || "";
       const markdown = [...attachmentBlocks, textMarkdown].filter(Boolean).join("\n\n");
       return {
         id: node.id || node.getAttribute("data-id") || node.getAttribute("data-testid") || `deepseek-message-${index}`,

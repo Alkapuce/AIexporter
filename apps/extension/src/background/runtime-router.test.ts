@@ -208,7 +208,9 @@ describe("background runtime router", () => {
   it("returns queue state snapshots for queue-state-request", async () => {
     const { handler, queueState, deps } = createRouter();
 
-    await expect(handler({ type: "queue-state-request" }, {} as browser.runtime.MessageSender)).resolves.toBe(queueState);
+    await expect(handler({ type: "queue-state-request" }, {} as browser.runtime.MessageSender)).resolves.toBe(
+      queueState,
+    );
     expect(deps.getQueueStateSnapshot).toHaveBeenCalledTimes(1);
   });
 
@@ -228,10 +230,7 @@ describe("background runtime router", () => {
   it("starts a full bootstrap sweep for deepseek", async () => {
     const { handler, serviceRuntime } = createRouter();
 
-    await handler(
-      { type: "service-full-bootstrap-run", platform: "deepseek" },
-      {} as browser.runtime.MessageSender,
-    );
+    await handler({ type: "service-full-bootstrap-run", platform: "deepseek" }, {} as browser.runtime.MessageSender);
     await Promise.resolve();
 
     expect(serviceRuntime.runPlatformDiscoverySweep).toHaveBeenCalledWith("deepseek", "full-bootstrap");
@@ -240,10 +239,7 @@ describe("background runtime router", () => {
   it("enables google platforms before resume", async () => {
     const { handler, deps, serviceRuntime } = createRouter();
 
-    await handler(
-      { type: "service-resume", platform: "gemini" },
-      {} as browser.runtime.MessageSender,
-    );
+    await handler({ type: "service-resume", platform: "gemini" }, {} as browser.runtime.MessageSender);
 
     expect(deps.updateQueueStateWithDerived).toHaveBeenCalled();
     expect(serviceRuntime.updatePlatformDesiredRunning).toHaveBeenCalledWith("gemini", true);
@@ -285,9 +281,7 @@ describe("background runtime router", () => {
         { id: "user", role: "user", name: "User" },
         { id: "assistant", role: "assistant", name: "DeepSeek" },
       ],
-      messages: [
-        { id: "m1", role: "user", markdown: "hello" },
-      ],
+      messages: [{ id: "m1", role: "user", markdown: "hello" }],
     };
     serviceRuntime.extractConversationFromTab
       .mockRejectedValueOnce(new Error("Could not establish connection. Receiving end does not exist."))
@@ -313,7 +307,12 @@ describe("background runtime router", () => {
         get: vi
           .fn()
           .mockResolvedValueOnce({ id: 11, url: "https://chat.deepseek.com/a/chat/s/conv-1", status: "complete" })
-          .mockResolvedValue({ id: 11, url: "https://chat.deepseek.com/a/chat/s/conv-1", title: "DeepSeek Chat", status: "complete" }),
+          .mockResolvedValue({
+            id: 11,
+            url: "https://chat.deepseek.com/a/chat/s/conv-1",
+            title: "DeepSeek Chat",
+            status: "complete",
+          }),
         reload: vi.fn().mockResolvedValue(undefined),
       },
     });

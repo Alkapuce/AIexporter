@@ -18,20 +18,13 @@ function createQueueState(overrides: Partial<QueueState> = {}): QueueState {
 
 describe("artifact sync state helpers", () => {
   it("runs weekly sync when there is no recorded successful sync", () => {
-    expect(
-      isAutomaticArtifactSyncDue(
-        undefined,
-        Date.parse("2026-04-17T00:00:00.000Z"),
-      ),
-    ).toBe(true);
+    expect(isAutomaticArtifactSyncDue(undefined, Date.parse("2026-04-17T00:00:00.000Z"))).toBe(true);
   });
 
   it("waits roughly a week before the next automatic sync", () => {
     const lastCompletedAt = "2026-04-10T00:00:00.000Z";
-    const almostDue =
-      Date.parse(lastCompletedAt) + AUTOMATIC_ARTIFACT_SYNC_INTERVAL_MS - 1;
-    const due =
-      Date.parse(lastCompletedAt) + AUTOMATIC_ARTIFACT_SYNC_INTERVAL_MS;
+    const almostDue = Date.parse(lastCompletedAt) + AUTOMATIC_ARTIFACT_SYNC_INTERVAL_MS - 1;
+    const due = Date.parse(lastCompletedAt) + AUTOMATIC_ARTIFACT_SYNC_INTERVAL_MS;
 
     expect(isAutomaticArtifactSyncDue(lastCompletedAt, almostDue)).toBe(false);
     expect(isAutomaticArtifactSyncDue(lastCompletedAt, due)).toBe(true);

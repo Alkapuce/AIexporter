@@ -53,7 +53,12 @@ export function installDeepSeekMainWorldBridge(): void {
         .then((payload) => {
           postDiscoveryPayloads(payload);
         })
-        .catch(() => undefined);
+        .catch((err) => {
+          console.warn(
+            "[AIexporter] DeepSeek discovery fetch failed:",
+            err instanceof Error ? err.message : String(err),
+          );
+        });
     }
 
     return response;

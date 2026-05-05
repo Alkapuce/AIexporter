@@ -14,17 +14,10 @@ function createQueueState(overrides: Partial<QueueState> = {}): QueueState {
 
 function createDeps() {
   return {
-    loadQueueState: vi
-      .fn<() => Promise<QueueState>>()
-      .mockResolvedValue(createQueueState()),
-    loadArtifactSyncState: vi
-      .fn<() => Promise<{ lastCompletedAt?: string }>>()
-      .mockResolvedValue({}),
+    loadQueueState: vi.fn<() => Promise<QueueState>>().mockResolvedValue(createQueueState()),
+    loadArtifactSyncState: vi.fn<() => Promise<{ lastCompletedAt?: string }>>().mockResolvedValue({}),
     runArtifactSync: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
-    requestPlatformTick:
-      vi.fn<
-        (platform: "chatgpt" | "gemini" | "aistudio" | "deepseek") => void
-      >(),
+    requestPlatformTick: vi.fn<(platform: "chatgpt" | "gemini" | "aistudio" | "deepseek") => void>(),
     writeBackgroundLog: vi.fn().mockResolvedValue(undefined),
   };
 }

@@ -9,7 +9,8 @@ export function startThemeSync(target: Document = document, options: { styleBody
     return existing;
   }
 
-  const mediaQuery = target.defaultView?.matchMedia("(prefers-color-scheme: dark)") ?? window.matchMedia("(prefers-color-scheme: dark)");
+  const mediaQuery =
+    target.defaultView?.matchMedia("(prefers-color-scheme: dark)") ?? window.matchMedia("(prefers-color-scheme: dark)");
   let currentThemeMode: ThemeMode = "system";
 
   const apply = (themeMode: ThemeMode) => {

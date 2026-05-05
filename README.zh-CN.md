@@ -16,12 +16,12 @@
 
 ## 平台支持
 
-| 平台 | 发现方式 | 导出 | 思考过程 | 附件 |
-| --- | --- | --- | --- | --- |
-| ChatGPT | 网络拦截 | 完整对话 | 支持 | — |
-| DeepSeek | 网络 + 历史 sweep | 完整对话 | 支持 | — |
-| Gemini | DOM + RPC 响应解析 | 完整对话 | 支持 | 图片、链接 |
-| AI Studio | DOM + library 页 sweep | 完整对话 | 支持 | — |
+| 平台      | 发现方式               | 导出     | 思考过程 | 附件       |
+| --------- | ---------------------- | -------- | -------- | ---------- |
+| ChatGPT   | 网络拦截               | 完整对话 | 支持     | —          |
+| DeepSeek  | 网络 + 历史 sweep      | 完整对话 | 支持     | —          |
+| Gemini    | DOM + RPC 响应解析     | 完整对话 | 支持     | 图片、链接 |
+| AI Studio | DOM + library 页 sweep | 完整对话 | 支持     | —          |
 
 ## 仓库结构
 
@@ -133,12 +133,12 @@ pwsh -File apps/extension/scripts/register-native-host.ps1
 
 Fastify 归档服务提供：
 
-| 端点 | 说明 |
-| --- | --- |
-| `POST /api/v1/ingest/conversations` | 导入对话 bundle |
-| `GET /api/v1/conversations` | 列表/搜索对话 |
-| `GET /api/v1/conversations/:platform/:sourceId` | 获取指定对话 |
-| `GET /healthz` | 健康检查 |
+| 端点                                            | 说明            |
+| ----------------------------------------------- | --------------- |
+| `POST /api/v1/ingest/conversations`             | 导入对话 bundle |
+| `GET /api/v1/conversations`                     | 列表/搜索对话   |
+| `GET /api/v1/conversations/:platform/:sourceId` | 获取指定对话    |
+| `GET /healthz`                                  | 健康检查        |
 
 ## Dashboard
 

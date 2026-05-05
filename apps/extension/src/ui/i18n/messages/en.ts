@@ -119,7 +119,8 @@ export const enMessages = {
   "settings.downloads.hideDownloadUi": "Hide download UI when possible",
   "settings.downloads.skipIfLatestExists": "Skip export when latest local artifact exists",
   "settings.downloads.retainLocalRevisionCount": "Retain local revision count",
-  "settings.downloads.retainLocalRevisionCountDeprecated": "Current exports now use a flat current-version layout. The old revision count is kept only for compatibility.",
+  "settings.downloads.retainLocalRevisionCountDeprecated":
+    "Current exports now use a flat current-version layout. The old revision count is kept only for compatibility.",
   "settings.downloads.openFileActionsEnabled": "Enable local file actions",
   "settings.downloads.exportRootPath": "Export root path",
   "settings.downloads.exportRootPlaceholder": "Leave empty to use the system Downloads folder",
@@ -143,12 +144,14 @@ export const enMessages = {
   "settings.settleDelayMs": "Settle delay (ms)",
   "settings.discoverySweepIntervalMs": "Discovery sweep interval (ms)",
   "settings.discoverySweepIntervalSummary": "Current automatic sweep cadence",
-  "settings.discoverySweepIntervalHelp": "While the service is running and there is no higher-priority export backlog, a normal discover sweep uses this interval.",
+  "settings.discoverySweepIntervalHelp":
+    "While the service is running and there is no higher-priority export backlog, a normal discover sweep uses this interval.",
   "settings.discoverySweepIntervalCustom": "Custom discovery sweep interval (ms)",
   "settings.discoveryReadyTimeoutMs": "Discovery ready timeout (ms)",
   "settings.discoveryScrollStableRounds": "Discovery stable rounds",
   "settings.discoveryAdvancedTitle": "Advanced Discovery Options (Gemini DOM)",
-  "settings.discoveryAdvancedHelp": "These parameters mainly tune Gemini DOM history collection. Changes apply to the next full discovery run.",
+  "settings.discoveryAdvancedHelp":
+    "These parameters mainly tune Gemini DOM history collection. Changes apply to the next full discovery run.",
   "settings.discoveryDomMaxCycles": "DOM max scan cycles",
   "settings.discoveryDomPostScrollWaitMs": "Post-scroll wait time (ms)",
   "settings.discoveryDomStableCycles": "No-growth cycles before stop",

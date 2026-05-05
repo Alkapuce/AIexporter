@@ -15,41 +15,28 @@ const writeBackgroundLog = vi.fn().mockResolvedValue(undefined);
 const syncBundleToServer = vi.fn().mockResolvedValue(undefined);
 const loadArtifactIndex = vi.fn().mockResolvedValue([]);
 const loadConversationIndex = vi.fn().mockResolvedValue([]);
-const updateArtifactIndex = vi
-  .fn()
-  .mockImplementation(async (updater: (entries: never[]) => unknown) =>
-    updater([]),
-  );
+const updateArtifactIndex = vi.fn().mockImplementation(async (updater: (entries: never[]) => unknown) => updater([]));
 const updateConversationIndex = vi.fn();
 const loadQueueState = vi.fn();
 const pingNativeHost = vi.fn().mockResolvedValue({ ok: true });
 const writeFileWithNativeHost = vi
   .fn()
-  .mockImplementation(
-    async (
-      relativePath: string,
-      content: string,
-      encoding: "utf8" | "base64",
-      rootPath?: string,
-    ) => {
-      const resolvedRoot = rootPath ?? "C:\\Users\\qpj\\Downloads";
-      const resolvedPath = `${resolvedRoot.replace(/[\\/]+$/, "")}\\${relativePath.replace(/\//g, "\\")}`;
-      writtenPaths.add(resolvedPath.toLowerCase());
-      writtenFileContents.set(resolvedPath.toLowerCase(), content);
-      return {
-        ok: true,
-        path: resolvedPath,
-        content,
-        encoding,
-      };
-    },
-  );
-const checkPathExistsWithNativeHost = vi
-  .fn()
-  .mockImplementation(async (path: string) => ({
-    ok: true,
-    path: writtenPaths.has(path.toLowerCase()) ? path : undefined,
-  }));
+  .mockImplementation(async (relativePath: string, content: string, encoding: "utf8" | "base64", rootPath?: string) => {
+    const resolvedRoot = rootPath ?? "C:\\Users\\qpj\\Downloads";
+    const resolvedPath = `${resolvedRoot.replace(/[\\/]+$/, "")}\\${relativePath.replace(/\//g, "\\")}`;
+    writtenPaths.add(resolvedPath.toLowerCase());
+    writtenFileContents.set(resolvedPath.toLowerCase(), content);
+    return {
+      ok: true,
+      path: resolvedPath,
+      content,
+      encoding,
+    };
+  });
+const checkPathExistsWithNativeHost = vi.fn().mockImplementation(async (path: string) => ({
+  ok: true,
+  path: writtenPaths.has(path.toLowerCase()) ? path : undefined,
+}));
 const movePathWithNativeHost = vi.fn();
 const openFileWithNativeHost = vi.fn();
 const pruneOldFilesWithNativeHost = vi.fn();
@@ -264,8 +251,7 @@ function createFallbackTitleBundle(): ConversationBundle {
       {
         id: "user-1",
         role: "user",
-        markdown:
-          "请非常详细地系统讲解一下麦克斯韦方程组在不同介质边界条件下的推导过程、物理意义、典型例题和常见误区",
+        markdown: "请非常详细地系统讲解一下麦克斯韦方程组在不同介质边界条件下的推导过程、物理意义、典型例题和常见误区",
       },
       {
         id: "assistant-1",
@@ -283,18 +269,11 @@ describe("persistBundle native host persistence", () => {
     vi.clearAllMocks();
     loadArtifactIndex.mockResolvedValue([]);
     loadConversationIndex.mockResolvedValue([]);
-    updateArtifactIndex.mockImplementation(
-      async (updater: (entries: never[]) => unknown) => updater([]),
-    );
+    updateArtifactIndex.mockImplementation(async (updater: (entries: never[]) => unknown) => updater([]));
     loadQueueState.mockResolvedValue(createQueueState("C:\\exports"));
     pingNativeHost.mockResolvedValue({ ok: true });
     writeFileWithNativeHost.mockImplementation(
-      async (
-        relativePath: string,
-        content: string,
-        encoding: "utf8" | "base64",
-        rootPath?: string,
-      ) => {
+      async (relativePath: string, content: string, encoding: "utf8" | "base64", rootPath?: string) => {
         const resolvedRoot = rootPath ?? "C:\\Users\\qpj\\Downloads";
         const resolvedPath = `${resolvedRoot.replace(/[\\/]+$/, "")}\\${relativePath.replace(/\//g, "\\")}`;
         writtenPaths.add(resolvedPath.toLowerCase());
@@ -312,12 +291,7 @@ describe("persistBundle native host persistence", () => {
       path: writtenPaths.has(path.toLowerCase()) ? path : undefined,
     }));
     downloadRemoteAsset.mockImplementation(
-      async (
-        relativePath: string,
-        _url: string,
-        _options: { forceFresh?: boolean } = {},
-        rootPath?: string,
-      ) => {
+      async (relativePath: string, _url: string, _options: { forceFresh?: boolean } = {}, rootPath?: string) => {
         const resolvedRoot = rootPath ?? "C:\\Users\\qpj\\Downloads";
         const resolvedPath = `${resolvedRoot.replace(/[\\/]+$/, "")}\\${relativePath.replace(/\//g, "\\")}`;
         writtenPaths.add(resolvedPath.toLowerCase());
@@ -352,10 +326,7 @@ describe("persistBundle native host persistence", () => {
   it("writes text artifacts and fetched remote assets through native host", async () => {
     const { persistBundle } = await import("./artifact-persistence");
 
-    const result = await persistBundle(
-      createBundle(),
-      createQueueState("C:\\exports").settings,
-    );
+    const result = await persistBundle(createBundle(), createQueueState("C:\\exports").settings);
 
     expect(writeFileWithNativeHost).toHaveBeenCalledTimes(3);
     expect(writeFileWithNativeHost).toHaveBeenCalledWith(
@@ -371,29 +342,20 @@ describe("persistBundle native host persistence", () => {
       "C:\\exports",
     );
     expect(writeFileWithNativeHost).toHaveBeenCalledWith(
-      expect.stringMatching(
-        /^AIexporter\/gemini\/.+\/assets\/01-diagram\.png$/,
-      ),
+      expect.stringMatching(/^AIexporter\/gemini\/.+\/assets\/01-diagram\.png$/),
       "AQIDBA==",
       "base64",
       "C:\\exports",
     );
-    expect(fetch).toHaveBeenCalledWith(
-      "https://example.com/assets/diagram.png",
-      {
-        credentials: "include",
-      },
-    );
+    expect(fetch).toHaveBeenCalledWith("https://example.com/assets/diagram.png", {
+      credentials: "include",
+    });
     expect(downloadRemoteAsset).not.toHaveBeenCalled();
     expect(result.files).toEqual(
       expect.arrayContaining([
         expect.stringMatching(/^C:\\exports\\AIexporter\\gemini\\.+\.md$/),
-        expect.stringMatching(
-          /^C:\\exports\\AIexporter\\gemini\\.+\.bundle\.json$/,
-        ),
-        expect.stringMatching(
-          /^C:\\exports\\AIexporter\\gemini\\.+\\assets\\01-diagram\.png$/,
-        ),
+        expect.stringMatching(/^C:\\exports\\AIexporter\\gemini\\.+\.bundle\.json$/),
+        expect.stringMatching(/^C:\\exports\\AIexporter\\gemini\\.+\\assets\\01-diagram\.png$/),
       ]),
     );
   });
@@ -402,14 +364,10 @@ describe("persistBundle native host persistence", () => {
     const { persistBundle } = await import("./artifact-persistence");
 
     await expect(
-      persistBundle(
-        createFallbackTitleBundle(),
-        createQueueState("C:\\exports").settings,
-      ),
+      persistBundle(createFallbackTitleBundle(), createQueueState("C:\\exports").settings),
     ).resolves.toMatchObject({
       bundle: {
-        title:
-          "请非常详细地系统讲解一下麦克斯韦方程组在不同介质边界条件下的推导过程、物理意义、典型例题和常见误",
+        title: "请非常详细地系统讲解一下麦克斯韦方程组在不同介质边界条件下的推导过程、物理意义、典型例题和常见误",
       },
     });
   });
@@ -417,12 +375,7 @@ describe("persistBundle native host persistence", () => {
   it("uses a document-specific asset directory for flat output exports", async () => {
     const { persistBundle } = await import("./artifact-persistence");
 
-    await persistBundle(
-      createBundle(),
-      createQueueState("C:\\exports").settings,
-      {},
-      { flatOutput: true },
-    );
+    await persistBundle(createBundle(), createQueueState("C:\\exports").settings, {}, { flatOutput: true });
 
     expect(writeFileWithNativeHost).toHaveBeenCalledWith(
       "Remote Asset Conversation.md",
@@ -454,32 +407,23 @@ describe("persistBundle native host persistence", () => {
         arrayBuffer: async () => Uint8Array.from([]).buffer,
       }),
     );
-    const result = await persistBundle(
-      createBundle(),
-      createQueueState("C:\\exports").settings,
-    );
+    const result = await persistBundle(createBundle(), createQueueState("C:\\exports").settings);
 
     expect(result.files).toEqual(
       expect.arrayContaining([
         expect.stringMatching(/^C:\\exports\\AIexporter\\gemini\\.+\.md$/),
-        expect.stringMatching(
-          /^C:\\exports\\AIexporter\\gemini\\.+\.bundle\.json$/,
-        ),
+        expect.stringMatching(/^C:\\exports\\AIexporter\\gemini\\.+\.bundle\.json$/),
       ]),
     );
     expect(result.files).toHaveLength(2);
     expect(downloadRemoteAsset).not.toHaveBeenCalled();
 
     const markdownPath = result.files.find((value) => value.endsWith(".md"));
-    const bundlePath = result.files.find((value) =>
-      value.endsWith(".bundle.json"),
-    );
+    const bundlePath = result.files.find((value) => value.endsWith(".bundle.json"));
     expect(markdownPath).toBeTruthy();
     expect(bundlePath).toBeTruthy();
 
-    const markdownContent = writtenFileContents.get(
-      markdownPath!.toLowerCase(),
-    );
+    const markdownContent = writtenFileContents.get(markdownPath!.toLowerCase());
     const bundleContent = writtenFileContents.get(bundlePath!.toLowerCase());
     expect(markdownContent).toContain("https://example.com/assets/diagram.png");
     expect(markdownContent).not.toContain("assets/01-diagram.png");

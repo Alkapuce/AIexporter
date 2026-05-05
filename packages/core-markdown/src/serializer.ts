@@ -34,7 +34,9 @@ function getBundleMetaString(bundle: ConversationBundle, key: string): string | 
 
 function getBundleMetaStrings(bundle: ConversationBundle, key: string): string[] {
   const value = getBundleMetaRecord(bundle)[key];
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : [];
 }
 
 function getAssistantName(bundle: ConversationBundle): string | undefined {
@@ -42,18 +44,17 @@ function getAssistantName(bundle: ConversationBundle): string | undefined {
 }
 
 function yamlValue(value: string | number | null | undefined): string {
-  if (value === undefined || value === null || value === "") return "\"\"";
+  if (value === undefined || value === null || value === "") return '""';
   if (typeof value === "number") return String(value);
 
-  return `"${value
-    .replaceAll("\\", "\\\\")
-    .replaceAll("\"", "\\\"")
-    .replaceAll("\r", "\\r")
-    .replaceAll("\n", "\\n")}"`;
+  return `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"').replaceAll("\r", "\\r").replaceAll("\n", "\\n")}"`;
 }
 
 function buildFrontmatterLines(bundle: ConversationBundle, options: SerializeOptions, messageCount: number): string[] {
-  const participantNames = bundle.participants.map((participant) => participant.name.trim()).filter(Boolean).join(", ");
+  const participantNames = bundle.participants
+    .map((participant) => participant.name.trim())
+    .filter(Boolean)
+    .join(", ");
   const assistantName = getAssistantName(bundle);
   const sourceHost = getBundleMetaString(bundle, "sourceHost");
   const sourceUpdatedLabel = getBundleMetaString(bundle, "sourceUpdatedLabel");
@@ -131,10 +132,7 @@ function buildConversationHeader(
   ].join("\n\n");
 }
 
-export function serializeConversation(
-  bundle: ConversationBundle,
-  options: SerializeOptions,
-): SerializeResult {
+export function serializeConversation(bundle: ConversationBundle, options: SerializeOptions): SerializeResult {
   const sections: string[] = [];
   const includeFrontmatter = options.includeFrontmatter ?? true;
   const format = options.format ?? "full";
@@ -149,7 +147,7 @@ export function serializeConversation(
   const messageCount = bodySections.length;
   const body = bodySections.length > 0 ? bodySections.join("\n\n") : "_(empty conversation)_";
   const bodyWithHeader =
-    options.includeConversationHeader ?? true
+    (options.includeConversationHeader ?? true)
       ? `${buildConversationHeader(bundle, { ...options, format }, messageCount, estimateTokens(body))}\n\n${body}`
       : body;
 

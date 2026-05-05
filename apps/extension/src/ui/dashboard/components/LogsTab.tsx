@@ -90,13 +90,20 @@ export function LogsTab({
   onCopyEntry,
 }: LogsTabProps) {
   const detailLogEntry =
-    logs.find((entry) => entry.id === selectedLogId) ??
-    logs.find((entry) => entry.id === hoveredLogId) ??
-    null;
+    logs.find((entry) => entry.id === selectedLogId) ?? logs.find((entry) => entry.id === hoveredLogId) ?? null;
 
   return (
     <div style={cardStyle}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 12,
+          alignItems: "center",
+          marginBottom: 12,
+          flexWrap: "wrap",
+        }}
+      >
         <div style={{ fontSize: 20, fontWeight: 700 }}>{t("logs.title")}</div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {(["debug", "info", "warn", "error"] as DebugLogLevel[]).map((level) => (
@@ -109,20 +116,37 @@ export function LogsTab({
               {level}
             </label>
           ))}
-          <ActionButton disabled={busy} style={{ background: "var(--aiexporter-button-accent-background)" }} onClick={onRefresh}>
+          <ActionButton
+            disabled={busy}
+            style={{ background: "var(--aiexporter-button-accent-background)" }}
+            onClick={onRefresh}
+          >
             {t("common.refresh")}
           </ActionButton>
-          <ActionButton disabled={busy} style={{ background: "var(--aiexporter-button-primary-background)" }} onClick={onExportLogs}>
+          <ActionButton
+            disabled={busy}
+            style={{ background: "var(--aiexporter-button-primary-background)" }}
+            onClick={onExportLogs}
+          >
             {t("logs.export")}
           </ActionButton>
-          <ActionButton disabled={busy} style={{ background: "var(--aiexporter-button-danger-background)" }} onClick={onClearLogs}>
+          <ActionButton
+            disabled={busy}
+            style={{ background: "var(--aiexporter-button-danger-background)" }}
+            onClick={onClearLogs}
+          >
             {t("logs.clear")}
           </ActionButton>
         </div>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr 0.8fr 0.8fr", gap: 10, marginBottom: 12 }}>
-        <input style={inputStyle} value={logSearch} onChange={(event) => onLogSearchChange(event.target.value)} placeholder={t("logs.search")} />
+        <input
+          style={inputStyle}
+          value={logSearch}
+          onChange={(event) => onLogSearchChange(event.target.value)}
+          placeholder={t("logs.search")}
+        />
         <div
           style={{
             ...inputStyle,
@@ -183,11 +207,35 @@ export function LogsTab({
                   cursor: "pointer",
                 }}
               >
-                <span style={{ color: "var(--aiexporter-text-soft-color)" }}>{new Date(entry.timestamp).toLocaleTimeString()}</span>
-                <span style={{ color: getLevelColor(entry.level), fontWeight: 700, textTransform: "uppercase" }}>{entry.level}</span>
-                <span style={{ color: "var(--aiexporter-text-muted-color)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{entry.scope}</span>
-                <span style={{ color: "var(--aiexporter-text-muted-color)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{entry.code ?? "-"}</span>
-                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{entry.message}</span>
+                <span style={{ color: "var(--aiexporter-text-soft-color)" }}>
+                  {new Date(entry.timestamp).toLocaleTimeString()}
+                </span>
+                <span style={{ color: getLevelColor(entry.level), fontWeight: 700, textTransform: "uppercase" }}>
+                  {entry.level}
+                </span>
+                <span
+                  style={{
+                    color: "var(--aiexporter-text-muted-color)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {entry.scope}
+                </span>
+                <span
+                  style={{
+                    color: "var(--aiexporter-text-muted-color)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {entry.code ?? "-"}
+                </span>
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {entry.message}
+                </span>
               </div>
             ))
           )}
@@ -205,16 +253,34 @@ export function LogsTab({
             overflow: "auto",
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", marginBottom: 8 }}>
+          <div
+            style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", marginBottom: 8 }}
+          >
             <div style={{ fontSize: 12, fontWeight: 700 }}>{t("logs.detailsTitle")}</div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <ActionButton disabled={!detailLogEntry} style={{ background: "var(--aiexporter-button-primary-background)", padding: "6px 10px", fontSize: 12 }} onClick={onCopyDetails}>
+              <ActionButton
+                disabled={!detailLogEntry}
+                style={{ background: "var(--aiexporter-button-primary-background)", padding: "6px 10px", fontSize: 12 }}
+                onClick={onCopyDetails}
+              >
                 {copiedDetails ? t("common.copied") : t("common.copyJson")}
               </ActionButton>
-              <ActionButton disabled={!detailLogEntry} style={{ background: "var(--aiexporter-button-accent-background)", padding: "6px 10px", fontSize: 12 }} onClick={onCopyEntry}>
+              <ActionButton
+                disabled={!detailLogEntry}
+                style={{ background: "var(--aiexporter-button-accent-background)", padding: "6px 10px", fontSize: 12 }}
+                onClick={onCopyEntry}
+              >
                 {t("logs.copyEntry")}
               </ActionButton>
-              <ActionButton disabled={!selectedLogId} style={{ background: "var(--aiexporter-button-secondary-background)", padding: "6px 10px", fontSize: 12 }} onClick={() => onSelectLog(null)}>
+              <ActionButton
+                disabled={!selectedLogId}
+                style={{
+                  background: "var(--aiexporter-button-secondary-background)",
+                  padding: "6px 10px",
+                  fontSize: 12,
+                }}
+                onClick={() => onSelectLog(null)}
+              >
                 {t("logs.clearSelection")}
               </ActionButton>
             </div>
@@ -224,7 +290,15 @@ export function LogsTab({
               <div style={{ fontSize: 12, color: "var(--aiexporter-log-panel-muted-text-color)" }}>
                 {formatTimestamp(detailLogEntry.timestamp)} · {detailLogEntry.scope} · {detailLogEntry.code ?? "-"}
               </div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", fontSize: 11, color: "var(--aiexporter-log-panel-muted-text-color)" }}>
+              <div
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  flexWrap: "wrap",
+                  fontSize: 11,
+                  color: "var(--aiexporter-log-panel-muted-text-color)",
+                }}
+              >
                 {detailLogEntry.sourceId ? <span>sourceId: {detailLogEntry.sourceId}</span> : null}
                 {detailLogEntry.traceId ? <span>traceId: {detailLogEntry.traceId}</span> : null}
                 {detailLogEntry.workerId ? <span>workerId: {detailLogEntry.workerId}</span> : null}
@@ -253,12 +327,17 @@ export function LogsTab({
                           gridTemplateColumns: "76px 48px 1fr",
                           gap: 8,
                           fontSize: 11,
-                          color: entry.id === detailLogEntry.id ? "var(--aiexporter-log-panel-text-color)" : "var(--aiexporter-log-panel-muted-text-color)",
+                          color:
+                            entry.id === detailLogEntry.id
+                              ? "var(--aiexporter-log-panel-text-color)"
+                              : "var(--aiexporter-log-panel-muted-text-color)",
                           opacity: entry.id === detailLogEntry.id ? 1 : 0.9,
                         }}
                       >
                         <span>{new Date(entry.timestamp).toLocaleTimeString()}</span>
-                        <span style={{ textTransform: "uppercase", color: getLevelColor(entry.level) }}>{entry.level}</span>
+                        <span style={{ textTransform: "uppercase", color: getLevelColor(entry.level) }}>
+                          {entry.level}
+                        </span>
                         <span>
                           [{entry.scope}] {entry.message}
                         </span>
@@ -282,7 +361,9 @@ export function LogsTab({
               </pre>
             </div>
           ) : (
-            <div style={{ color: "var(--aiexporter-log-panel-muted-text-color)", fontSize: 12 }}>{t("logs.detailsHint")}</div>
+            <div style={{ color: "var(--aiexporter-log-panel-muted-text-color)", fontSize: 12 }}>
+              {t("logs.detailsHint")}
+            </div>
           )}
         </div>
       </div>

@@ -7,7 +7,7 @@ describe("gemini rpc helpers", () => {
     expect(Array.isArray(payload)).toBe(true);
 
     const rpcEntry = Array.isArray(payload[0]) && Array.isArray(payload[0][0]) ? payload[0][0] : [];
-    const requestArgs = typeof rpcEntry[1] === "string" ? JSON.parse(rpcEntry[1]) as unknown[] : [];
+    const requestArgs = typeof rpcEntry[1] === "string" ? (JSON.parse(rpcEntry[1]) as unknown[]) : [];
 
     expect(requestArgs[0]).toBe("c_98c617fa8bc7844f");
     expect(requestArgs[1]).toBe(GEMINI_CONVERSATION_FETCH_LIMIT);

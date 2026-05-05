@@ -84,8 +84,16 @@ function formatTimestamp(value: string | undefined): string {
 }
 
 export function DashboardApp({ mode }: { mode: DashboardMode }) {
-  const { queueState, debugState, artifactIndex, conversationIndex, settingsDraft, setSettingsDraft, loadError, refresh } =
-    useDashboardSnapshot(mode);
+  const {
+    queueState,
+    debugState,
+    artifactIndex,
+    conversationIndex,
+    settingsDraft,
+    setSettingsDraft,
+    loadError,
+    refresh,
+  } = useDashboardSnapshot(mode);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [tab, setTab] = useState<DashboardTab>("overview");
@@ -289,7 +297,10 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
   const selectedService = queueState.services[selectedPlatform];
   const selectedPlatformLabel = platformLabels[selectedPlatform];
   const missingLocalQueueKeys = filteredQueueItems
-    .filter((item) => !(settingsDraft.downloads.openFileActionsEnabled && artifactState.openableSourceIds.has(item.event.sourceId)))
+    .filter(
+      (item) =>
+        !(settingsDraft.downloads.openFileActionsEnabled && artifactState.openableSourceIds.has(item.event.sourceId)),
+    )
     .filter((item) => item.status !== "processing")
     .map((item) => item.key);
 
@@ -330,7 +341,8 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
         ...containerStyle,
         minWidth: 520,
         maxWidth: 620,
-        background: "linear-gradient(180deg, var(--aiexporter-page-background) 0%, var(--aiexporter-page-alt-background) 100%)",
+        background:
+          "linear-gradient(180deg, var(--aiexporter-page-background) 0%, var(--aiexporter-page-alt-background) 100%)",
       }}
     >
       {actionError ? (
@@ -356,7 +368,11 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
               {t("popup.subtitle")}
             </div>
           </div>
-          <ActionButton disabled={busy} style={{ background: "var(--aiexporter-button-accent-background)" }} onClick={() => void openDashboard()}>
+          <ActionButton
+            disabled={busy}
+            style={{ background: "var(--aiexporter-button-accent-background)" }}
+            onClick={() => void openDashboard()}
+          >
             {t("common.openDashboard")}
           </ActionButton>
         </div>
@@ -388,8 +404,12 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
                     style={{
                       padding: "4px 8px",
                       borderRadius: 999,
-                      background: service.desiredRunning ? "var(--aiexporter-success-background)" : "var(--aiexporter-chip-background)",
-                      color: service.desiredRunning ? "var(--aiexporter-success-text-color)" : "var(--aiexporter-chip-text-color)",
+                      background: service.desiredRunning
+                        ? "var(--aiexporter-success-background)"
+                        : "var(--aiexporter-chip-background)",
+                      color: service.desiredRunning
+                        ? "var(--aiexporter-success-text-color)"
+                        : "var(--aiexporter-chip-text-color)",
                       fontSize: 11,
                       fontWeight: 700,
                     }}
@@ -421,8 +441,12 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
                 </div>
 
                 <div style={{ display: "grid", gap: 4, fontSize: 11, color: "var(--aiexporter-text-muted-color)" }}>
-                  <div>{t("overview.lastDiscovery")}: {formatTimestamp(service.lastDiscoveryAt)}</div>
-                  <div>{t("overview.lastExport")}: {formatTimestamp(service.lastExportAt)}</div>
+                  <div>
+                    {t("overview.lastDiscovery")}: {formatTimestamp(service.lastDiscoveryAt)}
+                  </div>
+                  <div>
+                    {t("overview.lastExport")}: {formatTimestamp(service.lastExportAt)}
+                  </div>
                 </div>
 
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -433,10 +457,26 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
                   >
                     {t("common.resume")}
                   </ActionButton>
-                  <ActionButton disabled={busy} style={{ background: "var(--aiexporter-button-danger-background)", padding: "6px 10px", fontSize: 12 }} onClick={() => void runAction(() => pausePlatform(platform))}>
+                  <ActionButton
+                    disabled={busy}
+                    style={{
+                      background: "var(--aiexporter-button-danger-background)",
+                      padding: "6px 10px",
+                      fontSize: 12,
+                    }}
+                    onClick={() => void runAction(() => pausePlatform(platform))}
+                  >
                     {t("common.pause")}
                   </ActionButton>
-                  <ActionButton disabled={busy} style={{ background: "var(--aiexporter-button-accent-background)", padding: "6px 10px", fontSize: 12 }} onClick={() => void runAction(() => runDiscovery(platform))}>
+                  <ActionButton
+                    disabled={busy}
+                    style={{
+                      background: "var(--aiexporter-button-accent-background)",
+                      padding: "6px 10px",
+                      fontSize: 12,
+                    }}
+                    onClick={() => void runAction(() => runDiscovery(platform))}
+                  >
                     {t("common.runDiscovery")}
                   </ActionButton>
                 </div>
@@ -446,10 +486,18 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
         </div>
 
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 16 }}>
-          <ActionButton disabled={busy} style={{ background: "var(--aiexporter-button-primary-background)" }} onClick={() => void runAction(() => processQueue())}>
+          <ActionButton
+            disabled={busy}
+            style={{ background: "var(--aiexporter-button-primary-background)" }}
+            onClick={() => void runAction(() => processQueue())}
+          >
             {t("common.processQueue")}
           </ActionButton>
-          <ActionButton disabled={busy} style={{ background: "var(--aiexporter-button-secondary-background)" }} onClick={() => void refresh()}>
+          <ActionButton
+            disabled={busy}
+            style={{ background: "var(--aiexporter-button-secondary-background)" }}
+            onClick={() => void refresh()}
+          >
             {t("common.refresh")}
           </ActionButton>
         </div>
@@ -469,33 +517,99 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
     <div style={{ ...containerStyle, minWidth: 980 }}>
       <div style={{ display: "grid", gap: 16 }}>
         {actionError ? (
-          <div style={{ borderRadius: 12, background: "var(--aiexporter-danger-background)", border: "1px solid var(--aiexporter-danger-border-color)", color: "var(--aiexporter-danger-text-color)", padding: "10px 12px", fontSize: 12 }}>
+          <div
+            style={{
+              borderRadius: 12,
+              background: "var(--aiexporter-danger-background)",
+              border: "1px solid var(--aiexporter-danger-border-color)",
+              color: "var(--aiexporter-danger-text-color)",
+              padding: "10px 12px",
+              fontSize: 12,
+            }}
+          >
             {actionError}
           </div>
         ) : null}
         <div style={cardStyle}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 16,
+              flexWrap: "wrap",
+            }}
+          >
             <div>
               <div style={{ fontSize: 26, fontWeight: 700 }}>{t("dashboard.title")}</div>
               <div style={{ color: "var(--aiexporter-text-muted-color)", marginTop: 6 }}>{t("dashboard.subtitle")}</div>
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <ActionButton disabled={busy} style={{ background: locale === "zh-CN" ? "var(--aiexporter-button-primary-background)" : "var(--aiexporter-button-secondary-background)" }} onClick={() => void applyLocale("zh-CN")}>
+              <ActionButton
+                disabled={busy}
+                style={{
+                  background:
+                    locale === "zh-CN"
+                      ? "var(--aiexporter-button-primary-background)"
+                      : "var(--aiexporter-button-secondary-background)",
+                }}
+                onClick={() => void applyLocale("zh-CN")}
+              >
                 {t("common.languageChinese")}
               </ActionButton>
-              <ActionButton disabled={busy} style={{ background: locale === "en" ? "var(--aiexporter-button-primary-background)" : "var(--aiexporter-button-secondary-background)" }} onClick={() => void applyLocale("en")}>
+              <ActionButton
+                disabled={busy}
+                style={{
+                  background:
+                    locale === "en"
+                      ? "var(--aiexporter-button-primary-background)"
+                      : "var(--aiexporter-button-secondary-background)",
+                }}
+                onClick={() => void applyLocale("en")}
+              >
                 {t("common.languageEnglish")}
               </ActionButton>
-              <ActionButton disabled={busy} style={{ background: themeMode === "system" ? "var(--aiexporter-button-primary-background)" : "var(--aiexporter-button-secondary-background)" }} onClick={() => void applyThemeMode("system")}>
+              <ActionButton
+                disabled={busy}
+                style={{
+                  background:
+                    themeMode === "system"
+                      ? "var(--aiexporter-button-primary-background)"
+                      : "var(--aiexporter-button-secondary-background)",
+                }}
+                onClick={() => void applyThemeMode("system")}
+              >
                 {t("common.themeSystem")}
               </ActionButton>
-              <ActionButton disabled={busy} style={{ background: themeMode === "light" ? "var(--aiexporter-button-primary-background)" : "var(--aiexporter-button-secondary-background)" }} onClick={() => void applyThemeMode("light")}>
+              <ActionButton
+                disabled={busy}
+                style={{
+                  background:
+                    themeMode === "light"
+                      ? "var(--aiexporter-button-primary-background)"
+                      : "var(--aiexporter-button-secondary-background)",
+                }}
+                onClick={() => void applyThemeMode("light")}
+              >
                 {t("common.themeLight")}
               </ActionButton>
-              <ActionButton disabled={busy} style={{ background: themeMode === "dark" ? "var(--aiexporter-button-primary-background)" : "var(--aiexporter-button-secondary-background)" }} onClick={() => void applyThemeMode("dark")}>
+              <ActionButton
+                disabled={busy}
+                style={{
+                  background:
+                    themeMode === "dark"
+                      ? "var(--aiexporter-button-primary-background)"
+                      : "var(--aiexporter-button-secondary-background)",
+                }}
+                onClick={() => void applyThemeMode("dark")}
+              >
                 {t("common.themeDark")}
               </ActionButton>
-              <ActionButton disabled={busy} style={{ background: "var(--aiexporter-button-accent-background)" }} onClick={() => void refresh()}>
+              <ActionButton
+                disabled={busy}
+                style={{ background: "var(--aiexporter-button-accent-background)" }}
+                onClick={() => void refresh()}
+              >
                 {t("common.refresh")}
               </ActionButton>
             </div>
@@ -505,7 +619,12 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
             {dashboardPlatforms.map((platform) => (
               <ActionButton
                 key={platform}
-                style={{ background: selectedPlatform === platform ? "var(--aiexporter-button-primary-background)" : "var(--aiexporter-button-secondary-background)" }}
+                style={{
+                  background:
+                    selectedPlatform === platform
+                      ? "var(--aiexporter-button-primary-background)"
+                      : "var(--aiexporter-button-secondary-background)",
+                }}
                 onClick={() => setSelectedPlatform(platform)}
               >
                 {platformLabels[platform]}
@@ -517,7 +636,12 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
             {tabs.map((nextTab) => (
               <ActionButton
                 key={nextTab}
-                style={{ background: tab === nextTab ? "var(--aiexporter-button-primary-background)" : "var(--aiexporter-button-secondary-background)" }}
+                style={{
+                  background:
+                    tab === nextTab
+                      ? "var(--aiexporter-button-primary-background)"
+                      : "var(--aiexporter-button-secondary-background)",
+                }}
                 onClick={() => setTab(nextTab)}
               >
                 {t(`tabs.${nextTab}` as const)}
@@ -560,7 +684,9 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
             onRetryFailed={() => void runAction(() => retryFailed())}
             onReExportMissingLocal={() => void runAction(() => reExportMissingLocal())}
             onClearCompleted={() => void runAction(() => clearQueueStatuses(["completed"], selectedPlatform))}
-            onClearFailed={() => void runAction(() => clearQueueStatuses(["failed", "cancelled", "skipped"], selectedPlatform))}
+            onClearFailed={() =>
+              void runAction(() => clearQueueStatuses(["failed", "cancelled", "skipped"], selectedPlatform))
+            }
             missingLocalCount={missingLocalQueueKeys.length}
             onPausePlatform={() => void runAction(() => pausePlatform(selectedPlatform))}
             onResumePlatform={() => void runAction(() => resumePlatform(selectedPlatform))}
@@ -694,9 +820,9 @@ export function DashboardApp({ mode }: { mode: DashboardMode }) {
           />
         ) : null}
 
-          <div style={{ color: "var(--aiexporter-text-muted-color)", fontSize: 12 }}>
-          {selectedPlatformLabel} · {t("overview.lastDiscovery")}: {formatTimestamp(selectedService.lastDiscoveryAt)} · {t("overview.lastExport")}:{" "}
-          {formatTimestamp(selectedService.lastExportAt)}
+        <div style={{ color: "var(--aiexporter-text-muted-color)", fontSize: 12 }}>
+          {selectedPlatformLabel} · {t("overview.lastDiscovery")}: {formatTimestamp(selectedService.lastDiscoveryAt)} ·{" "}
+          {t("overview.lastExport")}: {formatTimestamp(selectedService.lastExportAt)}
         </div>
       </div>
     </div>

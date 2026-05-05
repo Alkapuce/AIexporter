@@ -1,7 +1,8 @@
 {
   "name": "aiexporter",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "packageManager": "pnpm@10.11.1",
   "engines": {
@@ -17,8 +18,11 @@
   },
   "scripts": {
     "build": "corepack pnpm -r build",
+    "clean": "corepack pnpm -r exec rm -rf dist",
     "dev:ext": "corepack pnpm --filter @aiexporter/extension dev",
     "dev:server": "corepack pnpm --filter @aiexporter/server dev",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "lint": "corepack pnpm -r lint",
     "test": "corepack pnpm -r test",
     "typecheck": "corepack pnpm -r typecheck"

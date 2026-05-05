@@ -119,7 +119,8 @@ export const zhCNMessages = {
   "settings.downloads.hideDownloadUi": "尽量隐藏下载界面",
   "settings.downloads.skipIfLatestExists": "本地已有最新文件时跳过导出",
   "settings.downloads.retainLocalRevisionCount": "本地保留 revision 数",
-  "settings.downloads.retainLocalRevisionCountDeprecated": "当前已改为“平铺当前版 + 版本策略”管理，旧的 revision 保留数仅做兼容占位。",
+  "settings.downloads.retainLocalRevisionCountDeprecated":
+    "当前已改为“平铺当前版 + 版本策略”管理，旧的 revision 保留数仅做兼容占位。",
   "settings.downloads.openFileActionsEnabled": "启用本地文件操作",
   "settings.downloads.exportRootPath": "导出根目录",
   "settings.downloads.exportRootPlaceholder": "留空表示系统 Downloads 目录",

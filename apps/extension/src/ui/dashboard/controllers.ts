@@ -200,7 +200,9 @@ export function buildDashboardConversationIndexMap(
   entries: ConversationIndexEntry[],
   platform: SourcePlatform = DEEPSEEK_PLATFORM,
 ): Map<string, ConversationIndexEntry> {
-  return new Map(entries.filter((entry) => entry.platform === platform).map((entry) => [entry.sourceId, entry] as const));
+  return new Map(
+    entries.filter((entry) => entry.platform === platform).map((entry) => [entry.sourceId, entry] as const),
+  );
 }
 
 export function parseRelativeTimeLabel(label: string | undefined, now = new Date()): number | null {
@@ -252,7 +254,7 @@ export function sortDashboardQueueItems(
 
     const leftValue =
       sortKey === "title"
-        ? left.event.title ?? leftIndex?.title ?? ""
+        ? (left.event.title ?? leftIndex?.title ?? "")
         : sortKey === "sourceId"
           ? left.event.sourceId
           : sortKey === "status"
@@ -275,7 +277,7 @@ export function sortDashboardQueueItems(
 
     const rightValue =
       sortKey === "title"
-        ? right.event.title ?? rightIndex?.title ?? ""
+        ? (right.event.title ?? rightIndex?.title ?? "")
         : sortKey === "sourceId"
           ? right.event.sourceId
           : sortKey === "status"
@@ -307,15 +309,13 @@ export function buildDashboardArtifactState(
   artifactIndex: ExportArtifactEntry[],
   platform: SourcePlatform = DEEPSEEK_PLATFORM,
 ): DashboardArtifactState {
-  const sourceIds = new Set(artifactIndex.filter((entry) => entry.platform === platform).map((entry) => entry.sourceId));
+  const sourceIds = new Set(
+    artifactIndex.filter((entry) => entry.platform === platform).map((entry) => entry.sourceId),
+  );
   const latestArtifacts = new Map(
     Array.from(sourceIds)
       .map(
-        (sourceId) =>
-          [
-            sourceId,
-            findLatestOpenableArtifactForConversation(artifactIndex, platform, sourceId),
-          ] as const,
+        (sourceId) => [sourceId, findLatestOpenableArtifactForConversation(artifactIndex, platform, sourceId)] as const,
       )
       .filter((entry): entry is readonly [string, ExportArtifactEntry] => Boolean(entry[1])),
   );

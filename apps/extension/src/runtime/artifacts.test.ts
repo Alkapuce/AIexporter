@@ -38,24 +38,13 @@ describe("artifact helpers", () => {
   ];
 
   it("finds the latest artifact for a conversation", () => {
-    const latest = findLatestArtifactForConversation(
-      artifacts,
-      "deepseek",
-      "conv-1",
-    );
+    const latest = findLatestArtifactForConversation(artifacts, "deepseek", "conv-1");
     expect(latest?.revision).toBe("rev-3");
-    expect(
-      findExactArtifact(artifacts, "deepseek", "conv-1", "rev-2")
-        ?.markdownDownloadId,
-    ).toBe(102);
+    expect(findExactArtifact(artifacts, "deepseek", "conv-1", "rev-2")?.markdownDownloadId).toBe(102);
   });
 
   it("skips persistence when latest local artifact already exists", () => {
-    const latest = findLatestArtifactForConversation(
-      artifacts,
-      "deepseek",
-      "conv-1",
-    );
+    const latest = findLatestArtifactForConversation(artifacts, "deepseek", "conv-1");
     expect(
       shouldSkipPersist(
         latest,
@@ -75,37 +64,21 @@ describe("artifact helpers", () => {
 
   it("marks retained latest artifacts and prunes older revisions", () => {
     const marked = markLatestArtifacts(artifacts, "deepseek", "conv-1", 1);
-    expect(
-      marked.find((entry) => entry.revision === "rev-3")
-        ?.isLatestForConversation,
-    ).toBe(true);
-    expect(
-      marked.find((entry) => entry.revision === "rev-2")
-        ?.isLatestForConversation,
-    ).toBe(false);
+    expect(marked.find((entry) => entry.revision === "rev-3")?.isLatestForConversation).toBe(true);
+    expect(marked.find((entry) => entry.revision === "rev-2")?.isLatestForConversation).toBe(false);
 
     const pruneResult = pruneOldArtifacts(artifacts, "deepseek", "conv-1", 1);
     const retained = pruneResult.nextEntries.filter(
-      (entry) =>
-        entry.platform === "deepseek" &&
-        entry.sourceId === "conv-1" &&
-        entry.localStatus !== "deleted",
+      (entry) => entry.platform === "deepseek" && entry.sourceId === "conv-1" && entry.localStatus !== "deleted",
     );
 
     expect(retained).toHaveLength(1);
     expect(retained[0]?.revision).toBe("rev-3");
-    expect(pruneResult.pruned.map((entry) => entry.revision)).toEqual([
-      "rev-2",
-      "rev-1",
-    ]);
+    expect(pruneResult.pruned.map((entry) => entry.revision)).toEqual(["rev-2", "rev-1"]);
   });
 
   it("does not skip when latest-exists policy is disabled", () => {
-    const latest = findLatestArtifactForConversation(
-      artifacts,
-      "deepseek",
-      "conv-1",
-    );
+    const latest = findLatestArtifactForConversation(artifacts, "deepseek", "conv-1");
     expect(
       shouldSkipPersist(
         latest,
@@ -124,11 +97,7 @@ describe("artifact helpers", () => {
   });
 
   it("does not skip when the latest artifact was exported by an older compatibility version", () => {
-    const latest = findLatestArtifactForConversation(
-      artifacts,
-      "deepseek",
-      "conv-1",
-    );
+    const latest = findLatestArtifactForConversation(artifacts, "deepseek", "conv-1");
     expect(
       shouldSkipPersist(
         latest,
@@ -164,11 +133,7 @@ describe("artifact helpers", () => {
       1,
     );
 
-    const latest = findLatestArtifactForConversation(
-      marked,
-      "deepseek",
-      "conv-1",
-    );
+    const latest = findLatestArtifactForConversation(marked, "deepseek", "conv-1");
     expect(latest?.revision).toBe("rev-4");
     expect(latest?.localStatus).toBe("skipped_existing");
     expect(latest?.isLatestForConversation).toBe(true);

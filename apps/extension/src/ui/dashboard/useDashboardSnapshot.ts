@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ConversationIndexEntry, ExtensionSettings, ExportArtifactEntry, QueueState } from "@aiexporter/adapter-sdk";
+import type {
+  ConversationIndexEntry,
+  ExtensionSettings,
+  ExportArtifactEntry,
+  QueueState,
+} from "@aiexporter/adapter-sdk";
 import { fetchDashboardState, requestDebugState } from "../services/dashboard-api";
 import { areDashboardSettingsEqual, cloneDashboardSettings } from "./controllers";
 
@@ -44,9 +49,12 @@ export function useDashboardSnapshot(mode: DashboardMode) {
 
   useEffect(() => {
     void refresh();
-    const interval = window.setInterval(() => {
-      void refresh();
-    }, mode === "popup" ? 3_000 : 4_000);
+    const interval = window.setInterval(
+      () => {
+        void refresh();
+      },
+      mode === "popup" ? 3_000 : 4_000,
+    );
     return () => window.clearInterval(interval);
   }, [mode, refresh]);
 

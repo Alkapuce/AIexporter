@@ -27,8 +27,7 @@ export interface MainWorldBridgeMessage {
     | "gemini-network-discovery"
     | "gemini-page-api-response"
     | "deepseek-network-discovery"
-    | "deepseek-page-api-response"
-    ;
+    | "deepseek-page-api-response";
   payload?: BridgeNetworkPayload;
   requestId?: string;
   sourceId?: string;
@@ -47,7 +46,15 @@ export interface MainWorldBridgeMessage {
 export type QueueItemKind = "discovery" | "export";
 export type QueueItemPriority = "realtime" | "backfill" | "retry";
 export type QueueItemStatus = "pending" | "processing" | "completed" | "failed" | "skipped" | "cancelled";
-export type AutoExportServiceStatus = "idle" | "starting" | "discovering" | "backfilling" | "running" | "pausing" | "paused" | "error";
+export type AutoExportServiceStatus =
+  | "idle"
+  | "starting"
+  | "discovering"
+  | "backfilling"
+  | "running"
+  | "pausing"
+  | "paused"
+  | "error";
 export type DiscoveryMode = "passive_only" | "background_backfill";
 
 export interface PlatformRuntimeConfig {

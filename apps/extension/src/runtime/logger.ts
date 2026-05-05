@@ -18,10 +18,9 @@ function normalizeDetails(details: Record<string, unknown> | undefined): Record<
   }
 }
 
-function pickLogMetadata(details: Record<string, unknown> | undefined): Pick<
-  DebugLogInput,
-  "platform" | "sourceId" | "workerId" | "traceId" | "code"
-> {
+function pickLogMetadata(
+  details: Record<string, unknown> | undefined,
+): Pick<DebugLogInput, "platform" | "sourceId" | "workerId" | "traceId" | "code"> {
   return {
     platform: typeof details?.platform === "string" ? (details.platform as DebugLogInput["platform"]) : undefined,
     sourceId: typeof details?.sourceId === "string" ? details.sourceId : undefined,
@@ -113,10 +112,7 @@ export async function flushBufferedBackgroundLogs(reason: "timer" | "threshold" 
   ]);
 }
 
-export function createTraceLogger(
-  scope: string,
-  traceContext: Record<string, unknown>,
-) {
+export function createTraceLogger(scope: string, traceContext: Record<string, unknown>) {
   return async (level: DebugLogLevel, message: string, details?: Record<string, unknown>): Promise<void> => {
     await writeBackgroundLog(scope, level, message, {
       ...traceContext,

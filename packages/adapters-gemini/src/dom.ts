@@ -1,14 +1,9 @@
 import { normalizeConversationTitle, type ConversationBundle, type Message } from "@aiexporter/core-schema";
+import { sanitizeClone } from "@aiexporter/adapter-sdk";
 import { createMarkdownConverter } from "./turndown";
 
 function getView(document: Document): Window {
   return document.defaultView ?? window;
-}
-
-function sanitizeClone(element: HTMLElement): HTMLElement {
-  const clone = element.cloneNode(true) as HTMLElement;
-  clone.querySelectorAll("button, svg, script, style, textarea").forEach((node) => node.remove());
-  return clone;
 }
 
 function getElementText(element: Element | null | undefined): string {
@@ -147,7 +142,11 @@ function getGeminiTitle(document: Document): string | undefined {
   return headerTitle || sidebarTitle || pageTitle || extractGeminiPromptTitleFallback(document) || undefined;
 }
 
-export function extractGeminiConversationFromDom(document: Document, url: string, sourceId: string): ConversationBundle {
+export function extractGeminiConversationFromDom(
+  document: Document,
+  url: string,
+  sourceId: string,
+): ConversationBundle {
   const userNodes = Array.from(document.querySelectorAll<HTMLElement>(".query-text.gds-body-l"));
   const assistantNodes = Array.from(document.querySelectorAll<HTMLElement>("structured-content-container"));
   const orderedNodes = sortByDomOrder([...userNodes, ...assistantNodes]);
@@ -158,11 +157,13 @@ export function extractGeminiConversationFromDom(document: Document, url: string
       const role = isUser ? "user" : "assistant";
       const contentRoot = isUser
         ? node
-        : node.querySelector<HTMLElement>(".markdown, .markdown-main-panel, message-content") ?? node;
+        : (node.querySelector<HTMLElement>(".markdown, .markdown-main-panel, message-content") ?? node);
       let markdown = turndownNode(contentRoot);
 
       if (!isUser) {
-        const thoughts = node.closest(".response-content")?.querySelector<HTMLElement>("[data-test-id='model-thoughts']");
+        const thoughts = node
+          .closest(".response-content")
+          ?.querySelector<HTMLElement>("[data-test-id='model-thoughts']");
         const thoughtsLabel = getElementText(
           thoughts?.querySelector<HTMLElement>(".thoughts-header-button-label, .thoughts-content"),
         );
@@ -203,7 +204,8 @@ function findAiStudioSettingsValue(document: Document, label: string): string | 
   const matched = labels.find((element) => getElementText(element) === label);
   if (!matched) return undefined;
   const container =
-    matched.closest<HTMLElement>(".settings-item, .selector-container, .field-group, .overlay-header") ?? matched.parentElement;
+    matched.closest<HTMLElement>(".settings-item, .selector-container, .field-group, .overlay-header") ??
+    matched.parentElement;
   const text = getElementText(container).replace(/\s+/g, " ").trim();
   return text || undefined;
 }
@@ -377,8 +379,9 @@ function extractAiStudioTurnMarkdown(turn: HTMLElement, role: "user" | "assistan
     }
 
     const contentRoot =
-      turn.querySelector<HTMLElement>(".user-prompt-container ms-text-chunk, .user-prompt-container ms-cmark-node, .user-prompt-container ms-prompt-chunk") ??
-      turn.querySelector<HTMLElement>(".user-prompt-container .turn-content, .turn-content");
+      turn.querySelector<HTMLElement>(
+        ".user-prompt-container ms-text-chunk, .user-prompt-container ms-cmark-node, .user-prompt-container ms-prompt-chunk",
+      ) ?? turn.querySelector<HTMLElement>(".user-prompt-container .turn-content, .turn-content");
     if (!contentRoot) return "";
     return normalizeAiStudioText(turndownAiStudioNode(contentRoot));
   }
@@ -388,7 +391,7 @@ function extractAiStudioTurnMarkdown(turn: HTMLElement, role: "user" | "assistan
   if (thoughtChunk) {
     const thoughtRoots = filterTopLevelElements(
       Array.from(
-      thoughtChunk.querySelectorAll<HTMLElement>("ms-text-chunk, ms-cmark-node, p, li, pre, code, blockquote"),
+        thoughtChunk.querySelectorAll<HTMLElement>("ms-text-chunk, ms-cmark-node, p, li, pre, code, blockquote"),
       ),
     );
     const thoughtSource =
@@ -398,9 +401,7 @@ function extractAiStudioTurnMarkdown(turn: HTMLElement, role: "user" | "assistan
     const thoughtText = normalizeAiStudioText(thoughtSource);
     if (thoughtText) {
       const quotedThought = ["> [thinking]"]
-        .concat(
-          thoughtText.split("\n").map((line) => (line.trim().length > 0 ? `> ${line}` : ">")),
-        )
+        .concat(thoughtText.split("\n").map((line) => (line.trim().length > 0 ? `> ${line}` : ">")))
         .join("\n");
       blocks.push(quotedThought);
     }
@@ -426,8 +427,9 @@ function extractAiStudioTurnMarkdown(turn: HTMLElement, role: "user" | "assistan
       if (block) blocks.push(block);
     });
   } else if (!thoughtChunk) {
-    const fallbackRoot =
-      turn.querySelector<HTMLElement>(".model-prompt-container .turn-content, .model-prompt-container, .turn-content");
+    const fallbackRoot = turn.querySelector<HTMLElement>(
+      ".model-prompt-container .turn-content, .model-prompt-container, .turn-content",
+    );
     if (fallbackRoot) {
       const fallback = normalizeAiStudioText(turndownAiStudioNode(fallbackRoot));
       if (fallback) blocks.push(fallback);
@@ -437,7 +439,11 @@ function extractAiStudioTurnMarkdown(turn: HTMLElement, role: "user" | "assistan
   return uniqMarkdown(blocks).join("\n\n");
 }
 
-export async function extractAiStudioConversationFromDom(document: Document, url: string, sourceId: string): Promise<ConversationBundle> {
+export async function extractAiStudioConversationFromDom(
+  document: Document,
+  url: string,
+  sourceId: string,
+): Promise<ConversationBundle> {
   const messages = await collectAiStudioMessagesViaScroll(document);
   const title = getAiStudioTitle(document);
 

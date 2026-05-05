@@ -6,11 +6,7 @@ import { sanitizePathSegment } from "./utils";
 export class ArchiveStorage {
   constructor(private readonly rootDir: string) {}
 
-  buildRelativePaths(
-    bundle: ConversationBundle,
-    revision: string,
-    includeRawCapture: boolean,
-  ): ArchiveFilePaths {
+  buildRelativePaths(bundle: ConversationBundle, revision: string, includeRawCapture: boolean): ArchiveFilePaths {
     const base = path.posix.join(
       sanitizePathSegment(bundle.platform),
       sanitizePathSegment(bundle.sourceId),
@@ -36,7 +32,11 @@ export class ArchiveStorage {
     await fs.writeFile(path.join(this.rootDir, files.markdown), options.markdown, "utf8");
 
     if (options.rawCapture && files.rawCapture) {
-      await fs.writeFile(path.join(this.rootDir, files.rawCapture), JSON.stringify(options.rawCapture, null, 2), "utf8");
+      await fs.writeFile(
+        path.join(this.rootDir, files.rawCapture),
+        JSON.stringify(options.rawCapture, null, 2),
+        "utf8",
+      );
     }
 
     return files;

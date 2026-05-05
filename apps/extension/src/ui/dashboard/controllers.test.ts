@@ -376,13 +376,7 @@ describe("dashboard controllers", () => {
       },
     ]);
 
-    const sorted = sortDashboardQueueItems(
-      queueState.items,
-      conversationIndexMap,
-      new Map(),
-      "websiteTime",
-      "desc",
-    );
+    const sorted = sortDashboardQueueItems(queueState.items, conversationIndexMap, new Map(), "websiteTime", "desc");
 
     expect(sorted.map((item) => item.event.sourceId)).toEqual(["conv-2", "conv-1"]);
   });

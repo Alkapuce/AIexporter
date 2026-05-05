@@ -18,11 +18,7 @@ import {
   saveQueueState,
   updateQueueState,
 } from "../runtime/storage";
-import {
-  DEBUG_LAST_MANUAL_EXPORT_KEY,
-  ORPHANED_PROCESSING_RECOVERY_MS,
-  SUPPORTED_PLATFORMS,
-} from "./shared";
+import { DEBUG_LAST_MANUAL_EXPORT_KEY, ORPHANED_PROCESSING_RECOVERY_MS, SUPPORTED_PLATFORMS } from "./shared";
 
 function getPlatformTabQueryPatterns(platform: SourcePlatform): string[] {
   if (platform === "deepseek") return ["https://chat.deepseek.com/*"];
@@ -58,10 +54,7 @@ export function getPlatformConfig(settings: ExtensionSettings, platform: SourceP
   };
 }
 
-function migrateLegacyPlatformConfig(
-  platform: SourcePlatform,
-  config: PlatformRuntimeConfig,
-): PlatformRuntimeConfig {
+function migrateLegacyPlatformConfig(platform: SourcePlatform, config: PlatformRuntimeConfig): PlatformRuntimeConfig {
   let nextConfig: PlatformRuntimeConfig = {
     ...config,
     bootstrapWindowMode: "background_tab",

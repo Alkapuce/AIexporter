@@ -267,8 +267,9 @@ function extractMetadata(root: unknown): {
   const title = getNestedString(root, [0, 4, 0]);
   const model = getNestedString(root, [0, 3, 2]);
   const updatedAtPair = getNestedArray(root, [0, 4, 4, 0]);
-  const attributes = getNestedArray(root, [0, 4, 10])
-    .filter((entry): entry is [string, unknown] => Array.isArray(entry) && typeof entry[0] === "string");
+  const attributes = getNestedArray(root, [0, 4, 10]).filter(
+    (entry): entry is [string, unknown] => Array.isArray(entry) && typeof entry[0] === "string",
+  );
   const attributeMap = Object.fromEntries(attributes);
 
   return {
@@ -289,19 +290,21 @@ export function extractAiStudioConversationFromResolvedPromptPayload(
   const turns = collectAiStudioTurns(payload);
   const linkedAttachments: LinkedAttachmentDescriptor[] = [];
   const messages: Message[] = turns.flatMap((turn, index) => {
-      const role = turn[8] === "user" ? "user" : "assistant";
-      const markdown = buildTurnMarkdown(turn, index);
-      if (!markdown) return [];
-      const messageId = `${role}-${index + 1}`;
-      linkedAttachments.push(...collectLinkedAttachmentsForTurn(turn, messageId));
+    const role = turn[8] === "user" ? "user" : "assistant";
+    const markdown = buildTurnMarkdown(turn, index);
+    if (!markdown) return [];
+    const messageId = `${role}-${index + 1}`;
+    linkedAttachments.push(...collectLinkedAttachmentsForTurn(turn, messageId));
 
-      return [{
+    return [
+      {
         id: messageId,
         role,
         markdown,
         createdAt: findBestTurnTimestamp(turn),
-      } satisfies Message];
-    });
+      } satisfies Message,
+    ];
+  });
 
   const metadata = extractMetadata(payload);
 

@@ -2,7 +2,9 @@ FROM node:22-bookworm-slim
 
 WORKDIR /app
 
-RUN corepack enable
+# Pin pnpm version to match package.json → "packageManager"
+# When upgrading pnpm, update both this line and package.json.
+RUN corepack prepare pnpm@10.11.1 --activate
 
 COPY . .
 

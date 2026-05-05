@@ -8,11 +8,7 @@ import type { DebugLogLevel, MainWorldBridgeMessage } from "@aiexporter/adapter-
 import { normalizeConversationTitle, normalizeConversationUrl } from "@aiexporter/core-schema";
 import { mountGoogleContentRuntime } from "../google/content-runtime";
 
-type RuntimeLogger = (
-  level: DebugLogLevel,
-  message: string,
-  details?: Record<string, unknown>,
-) => Promise<void>;
+type RuntimeLogger = (level: DebugLogLevel, message: string, details?: Record<string, unknown>) => Promise<void>;
 
 async function expandGeminiHistoryBeforeDiscovery(document: Document): Promise<void> {
   const view = document.defaultView ?? window;
@@ -112,7 +108,13 @@ async function fetchGeminiConversationViaPageWorld(sourceId: string): Promise<st
       }
 
       if (!event.data.response.ok || typeof event.data.response.data !== "string") {
-        reject(new Error(event.data.response.ok ? "Gemini page-world bridge returned an invalid payload." : event.data.response.error));
+        reject(
+          new Error(
+            event.data.response.ok
+              ? "Gemini page-world bridge returned an invalid payload."
+              : event.data.response.error,
+          ),
+        );
         return;
       }
 
@@ -152,7 +154,9 @@ async function extractCurrentGeminiConversation(log: RuntimeLogger) {
       sourceId,
       resolveGeminiPromptTitle(document),
     );
-    const domHasConversationImages = Boolean(document.querySelector("structured-content-container img, .query-text.gds-body-l img"));
+    const domHasConversationImages = Boolean(
+      document.querySelector("structured-content-container img, .query-text.gds-body-l img"),
+    );
     if (domHasConversationImages && !bundleHasImageMarkdown(bundle.messages)) {
       const domBundle = await geminiAdapter.extractCurrentConversation({
         document,

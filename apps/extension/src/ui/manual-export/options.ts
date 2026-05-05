@@ -29,10 +29,7 @@ export function buildManualExportMarkdownOptions(preset: ManualExportPreset): Ma
   return { ...DEFAULT_MANUAL_EXPORT_MARKDOWN_OPTIONS };
 }
 
-export function applyManualExportPreset(
-  current: ManualExportOptions,
-  preset: ManualExportPreset,
-): ManualExportOptions {
+export function applyManualExportPreset(current: ManualExportOptions, preset: ManualExportPreset): ManualExportOptions {
   return {
     ...current,
     preset,

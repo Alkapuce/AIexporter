@@ -64,4 +64,3 @@ export function extractConversationIdFromUrl(url: string): string | null {
   const match = url.match(/\/c\/([^/?#]+)/);
   return match?.[1] ?? null;
 }
-

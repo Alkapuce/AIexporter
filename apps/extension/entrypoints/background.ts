@@ -12,41 +12,59 @@ const serviceRuntime = createBackgroundServiceRuntime();
 const handleRuntimeMessage = createBackgroundRuntimeRouter(serviceRuntime);
 
 export default defineBackground(() => {
-  void ensureInitialized().then((state) => {
-    void syncDownloadUiWithSettings(state.settings);
-    void writeBackgroundLog("background.lifecycle", "info", "Background script initialized.", {
-      settings: state.settings,
-    });
-
-    if (state.settings.scheduler.autoStartOnBrowserLaunch) {
-      SUPPORTED_PLATFORMS.forEach((platform) => {
-        serviceRuntime.requestPlatformStartupCatchup(platform);
-      });
-    }
-  });
-
-  browser.alarms.create(PERIODIC_ALARM_NAME, { periodInMinutes: 1 });
-
-  browser.runtime.onInstalled.addListener(() => {
-    void ensureInitialized().then((state) => {
+  void ensureInitialized()
+    .then((state) => {
       void syncDownloadUiWithSettings(state.settings);
-      void writeBackgroundLog("background.lifecycle", "info", "Extension installed or updated.");
-      SUPPORTED_PLATFORMS.forEach((platform) => {
-        serviceRuntime.requestPlatformTick(platform);
+      void writeBackgroundLog("background.lifecycle", "info", "Background script initialized.", {
+        settings: state.settings,
       });
-    });
-  });
 
-  browser.runtime.onStartup.addListener(() => {
-    void ensureInitialized().then((state) => {
-      void syncDownloadUiWithSettings(state.settings);
-      void writeBackgroundLog("background.lifecycle", "info", "Browser startup detected.");
       if (state.settings.scheduler.autoStartOnBrowserLaunch) {
         SUPPORTED_PLATFORMS.forEach((platform) => {
           serviceRuntime.requestPlatformStartupCatchup(platform);
         });
       }
+    })
+    .catch((err) => {
+      void writeBackgroundLog("background.lifecycle", "error", "Background initialization failed.", {
+        error: err instanceof Error ? err.message : String(err),
+      });
     });
+
+  browser.alarms.create(PERIODIC_ALARM_NAME, { periodInMinutes: 1 });
+
+  browser.runtime.onInstalled.addListener(() => {
+    void ensureInitialized()
+      .then((state) => {
+        void syncDownloadUiWithSettings(state.settings);
+        void writeBackgroundLog("background.lifecycle", "info", "Extension installed or updated.");
+        SUPPORTED_PLATFORMS.forEach((platform) => {
+          serviceRuntime.requestPlatformTick(platform);
+        });
+      })
+      .catch((err) => {
+        void writeBackgroundLog("background.lifecycle", "error", "onInstalled initialization failed.", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+  });
+
+  browser.runtime.onStartup.addListener(() => {
+    void ensureInitialized()
+      .then((state) => {
+        void syncDownloadUiWithSettings(state.settings);
+        void writeBackgroundLog("background.lifecycle", "info", "Browser startup detected.");
+        if (state.settings.scheduler.autoStartOnBrowserLaunch) {
+          SUPPORTED_PLATFORMS.forEach((platform) => {
+            serviceRuntime.requestPlatformStartupCatchup(platform);
+          });
+        }
+      })
+      .catch((err) => {
+        void writeBackgroundLog("background.lifecycle", "error", "onStartup initialization failed.", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
   });
 
   browser.alarms.onAlarm.addListener((alarm) => {

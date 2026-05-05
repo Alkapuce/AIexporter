@@ -1,5 +1,9 @@
 import { buildDiscoveryFingerprint, type MainWorldBridgeMessage, type RuntimeMessage } from "@aiexporter/adapter-sdk";
-import { chatgptAdapter, extractConversationIdFromUrl, parseChatGptConversationResponse } from "@aiexporter/adapters-chatgpt";
+import {
+  chatgptAdapter,
+  extractConversationIdFromUrl,
+  parseChatGptConversationResponse,
+} from "@aiexporter/adapters-chatgpt";
 import { normalizeConversationUrl } from "@aiexporter/core-schema";
 import { createDiscoveryBatchSender } from "../src/runtime/discovery-batch";
 import { createRuntimeLogger } from "../src/runtime/logger";
@@ -105,7 +109,13 @@ async function fetchChatGptConversationViaPageWorld(sourceId: string) {
       }
 
       try {
-        resolve(parseChatGptConversationResponse(event.data.response.data as Record<string, unknown>, normalizedUrl, sourceId));
+        resolve(
+          parseChatGptConversationResponse(
+            event.data.response.data as Record<string, unknown>,
+            normalizedUrl,
+            sourceId,
+          ),
+        );
       } catch (error) {
         reject(error instanceof Error ? error : new Error(String(error)));
       }

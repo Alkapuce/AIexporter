@@ -50,9 +50,19 @@ export function OverviewTab({
 
   return (
     <div style={cardStyle}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          gap: 16,
+          flexWrap: "wrap",
+        }}
+      >
         <div>
-          <div style={{ fontSize: 22, fontWeight: 700 }}>{platformLabel} {t("overview.serviceTitle")}</div>
+          <div style={{ fontSize: 22, fontWeight: 700 }}>
+            {platformLabel} {t("overview.serviceTitle")}
+          </div>
           <div style={{ marginTop: 8, color: "var(--aiexporter-text-muted-color)", fontSize: 14 }}>
             {t("overview.status")}: {service.status}
           </div>
@@ -61,16 +71,32 @@ export function OverviewTab({
           <ActionButton disabled={busy} onClick={onResume}>
             {t("common.resume")}
           </ActionButton>
-          <ActionButton disabled={busy} style={{ background: "var(--aiexporter-button-danger-background)" }} onClick={onPause}>
+          <ActionButton
+            disabled={busy}
+            style={{ background: "var(--aiexporter-button-danger-background)" }}
+            onClick={onPause}
+          >
             {t("common.pause")}
           </ActionButton>
-          <ActionButton disabled={busy} style={{ background: "var(--aiexporter-button-accent-background)" }} onClick={onRunDiscovery}>
+          <ActionButton
+            disabled={busy}
+            style={{ background: "var(--aiexporter-button-accent-background)" }}
+            onClick={onRunDiscovery}
+          >
             {t("common.runDiscovery")}
           </ActionButton>
-          <ActionButton disabled={busy} style={{ background: "var(--aiexporter-button-secondary-background)" }} onClick={onRunFullDiscovery}>
+          <ActionButton
+            disabled={busy}
+            style={{ background: "var(--aiexporter-button-secondary-background)" }}
+            onClick={onRunFullDiscovery}
+          >
             {t("common.runFullDiscovery")}
           </ActionButton>
-          <ActionButton disabled={busy} style={{ background: "var(--aiexporter-button-primary-background)" }} onClick={onProcessQueue}>
+          <ActionButton
+            disabled={busy}
+            style={{ background: "var(--aiexporter-button-primary-background)" }}
+            onClick={onProcessQueue}
+          >
             {t("common.processQueue")}
           </ActionButton>
         </div>
@@ -78,21 +104,52 @@ export function OverviewTab({
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 12, marginTop: 18 }}>
         {metrics.map(([label, value]) => (
-        <div key={label} style={{ border: "1px solid var(--aiexporter-border-color)", borderRadius: 12, padding: 12, background: "var(--aiexporter-surface-muted-background)" }}>
-          <div style={{ color: "var(--aiexporter-text-soft-color)", fontSize: 12 }}>{label}</div>
-          <div style={{ fontSize: 24, fontWeight: 700, marginTop: 6 }}>{value}</div>
-        </div>
-      ))}
+          <div
+            key={label}
+            style={{
+              border: "1px solid var(--aiexporter-border-color)",
+              borderRadius: 12,
+              padding: 12,
+              background: "var(--aiexporter-surface-muted-background)",
+            }}
+          >
+            <div style={{ color: "var(--aiexporter-text-soft-color)", fontSize: 12 }}>{label}</div>
+            <div style={{ fontSize: 24, fontWeight: 700, marginTop: 6 }}>{value}</div>
+          </div>
+        ))}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12, marginTop: 18, fontSize: 13, color: "var(--aiexporter-text-muted-color)" }}>
-        <div>{t("overview.lastDiscovery")}: {formatTimestamp(service.lastDiscoveryAt)}</div>
-        <div>{t("overview.lastExport")}: {formatTimestamp(service.lastExportAt)}</div>
-        <div>{t("overview.nextRun")}: {formatTimestamp(service.nextPlannedRunAt)}</div>
-        <div>{t("overview.lastError")}: {service.lastError ?? t("common.notAvailable")}</div>
-        <div>{t("overview.discoveryMode")}: {service.meta?.lastDiscoveryMode ?? t("common.notAvailable")}</div>
-        <div>{t("overview.discoveryQuality")}: {service.meta?.lastDiscoveryQuality ?? t("common.notAvailable")}</div>
-        <div>{t("overview.highestHistoricalCount")}: {service.meta?.highestHistoricalCountSeen ?? 0}</div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(2, 1fr)",
+          gap: 12,
+          marginTop: 18,
+          fontSize: 13,
+          color: "var(--aiexporter-text-muted-color)",
+        }}
+      >
+        <div>
+          {t("overview.lastDiscovery")}: {formatTimestamp(service.lastDiscoveryAt)}
+        </div>
+        <div>
+          {t("overview.lastExport")}: {formatTimestamp(service.lastExportAt)}
+        </div>
+        <div>
+          {t("overview.nextRun")}: {formatTimestamp(service.nextPlannedRunAt)}
+        </div>
+        <div>
+          {t("overview.lastError")}: {service.lastError ?? t("common.notAvailable")}
+        </div>
+        <div>
+          {t("overview.discoveryMode")}: {service.meta?.lastDiscoveryMode ?? t("common.notAvailable")}
+        </div>
+        <div>
+          {t("overview.discoveryQuality")}: {service.meta?.lastDiscoveryQuality ?? t("common.notAvailable")}
+        </div>
+        <div>
+          {t("overview.highestHistoricalCount")}: {service.meta?.highestHistoricalCountSeen ?? 0}
+        </div>
       </div>
     </div>
   );

@@ -112,33 +112,31 @@ function extractMessageMarkdown(message: DeepSeekMessage): string | undefined {
   const fileBlocks = buildFileAttachmentBlocks(message.files ?? []);
 
   const direct = message.content?.trim();
-  const textMarkdown = direct ? appendAttachmentBlocks(direct) : (() => {
-    const fragmentBlocks =
-      message.fragments
-        ?.map((fragment) => {
-          const content = fragment.content?.trim();
-          if (!content) return null;
-          return fragment.type === "THINK" ? formatThinkingFragment(content) : content;
-        })
-        .filter((block): block is string => Boolean(block)) ?? [];
+  const textMarkdown = direct
+    ? appendAttachmentBlocks(direct)
+    : (() => {
+        const fragmentBlocks =
+          message.fragments
+            ?.map((fragment) => {
+              const content = fragment.content?.trim();
+              if (!content) return null;
+              return fragment.type === "THINK" ? formatThinkingFragment(content) : content;
+            })
+            .filter((block): block is string => Boolean(block)) ?? [];
 
-    if (message.thinking_content?.trim()) {
-      fragmentBlocks.unshift(formatThinkingFragment(message.thinking_content.trim()));
-    }
+        if (message.thinking_content?.trim()) {
+          fragmentBlocks.unshift(formatThinkingFragment(message.thinking_content.trim()));
+        }
 
-    if (fragmentBlocks.length === 0) return undefined;
-    return appendAttachmentBlocks(fragmentBlocks.join("\n\n"));
-  })();
+        if (fragmentBlocks.length === 0) return undefined;
+        return appendAttachmentBlocks(fragmentBlocks.join("\n\n"));
+      })();
 
   if (!textMarkdown && fileBlocks.length === 0) return undefined;
   return [...fileBlocks, ...(textMarkdown ? [textMarkdown] : [])].join("\n\n");
 }
 
-export function parseHistoryResponse(
-  data: DeepSeekHistoryResponse,
-  url: string,
-  sourceId: string,
-): ConversationBundle {
+export function parseHistoryResponse(data: DeepSeekHistoryResponse, url: string, sourceId: string): ConversationBundle {
   const messages = data.data?.biz_data?.chat_messages ?? [];
   const sorted = [...messages].sort((left, right) => {
     const leftValue = typeof left.message_id === "number" ? left.message_id : Number(left.message_id ?? 0);

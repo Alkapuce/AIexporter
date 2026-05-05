@@ -50,7 +50,12 @@ export default defineUnlistedScript(() => {
         .then((payload) => {
           postDiscoveryPayloads(payload);
         })
-        .catch(() => undefined);
+        .catch((err) => {
+          console.warn(
+            "[AIexporter] ChatGPT discovery fetch failed:",
+            err instanceof Error ? err.message : String(err),
+          );
+        });
     }
 
     return response;

@@ -57,9 +57,7 @@ function normalizePath(path: string): string {
   return path.replace(/\//g, "\\").replace(/\\+$/g, "").toLowerCase();
 }
 
-function createBundle(
-  overrides: Partial<ConversationBundle> = {},
-): ConversationBundle {
+function createBundle(overrides: Partial<ConversationBundle> = {}): ConversationBundle {
   return {
     platform: "gemini",
     sourceId: "conv123456",
@@ -79,9 +77,7 @@ function createBundle(
   };
 }
 
-function createConversationIndexEntry(
-  overrides: Partial<ConversationIndexEntry> = {},
-): ConversationIndexEntry {
+function createConversationIndexEntry(overrides: Partial<ConversationIndexEntry> = {}): ConversationIndexEntry {
   return {
     platform: "gemini",
     sourceId: "conv-1",
@@ -122,12 +118,10 @@ describe("syncArtifactsWithDisk", () => {
       ok: true,
       content: "",
     });
-    nativeHostMocks.checkPathExistsWithNativeHost.mockImplementation(
-      async (path: string) => ({
-        ok: true,
-        path: existingPaths.has(normalizePath(path)) ? path : undefined,
-      }),
-    );
+    nativeHostMocks.checkPathExistsWithNativeHost.mockImplementation(async (path: string) => ({
+      ok: true,
+      path: existingPaths.has(normalizePath(path)) ? path : undefined,
+    }));
     persistenceMocks.verifyArtifactFilesPresent.mockResolvedValue(true);
   });
 
@@ -163,21 +157,13 @@ describe("syncArtifactsWithDisk", () => {
     expect(result.missingCount).toBe(1);
     expect(result.requeueEvents).toEqual([]);
     expect(storage.conversationIndex[0]?.exportState).toBe("exported");
-    expect(
-      storage.artifactIndex.find((entry) => entry.revision === "rev-old")
-        ?.localStatus,
-    ).toBe("missing");
-    expect(
-      storage.artifactIndex.find((entry) => entry.revision === "rev-latest")
-        ?.isLatestForConversation,
-    ).toBe(true);
+    expect(storage.artifactIndex.find((entry) => entry.revision === "rev-old")?.localStatus).toBe("missing");
+    expect(storage.artifactIndex.find((entry) => entry.revision === "rev-latest")?.isLatestForConversation).toBe(true);
   });
 
   it("imports bundle files from disk and marks their markdown as present", async () => {
-    const bundlePath =
-      "C:\\exports\\AIexporter\\gemini\\Disk Conversation__conv1234\\Disk Conversation.bundle.json";
-    const markdownPath =
-      "C:\\exports\\AIexporter\\gemini\\Disk Conversation__conv1234\\Disk Conversation.md";
+    const bundlePath = "C:\\exports\\AIexporter\\gemini\\Disk Conversation__conv1234\\Disk Conversation.bundle.json";
+    const markdownPath = "C:\\exports\\AIexporter\\gemini\\Disk Conversation__conv1234\\Disk Conversation.md";
     existingPaths.add(normalizePath(markdownPath));
     nativeHostMocks.listFilesWithNativeHost.mockResolvedValue({
       ok: true,
@@ -244,8 +230,7 @@ describe("syncArtifactsWithDisk", () => {
   it("does not move a legacy revision folder into its parent conversation folder", async () => {
     const bundlePath =
       "C:\\exports\\AIexporter\\gemini\\Disk Conversation__conv1234\\rev-disk\\Disk Conversation.bundle.json";
-    const markdownPath =
-      "C:\\exports\\AIexporter\\gemini\\Disk Conversation__conv1234\\rev-disk\\Disk Conversation.md";
+    const markdownPath = "C:\\exports\\AIexporter\\gemini\\Disk Conversation__conv1234\\rev-disk\\Disk Conversation.md";
     existingPaths.add(normalizePath(markdownPath));
     nativeHostMocks.listFilesWithNativeHost.mockResolvedValue({
       ok: true,

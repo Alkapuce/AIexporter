@@ -16,4 +16,3 @@ export function loadConfig(): ServerConfig {
     dataDir: process.env.AIEXPORTER_DATA_DIR,
   });
 }
-

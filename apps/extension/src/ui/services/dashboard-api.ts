@@ -113,10 +113,7 @@ export function retryFailed(): Promise<QueueState> {
   return sendMessage<QueueState>({ type: "queue-retry-request" });
 }
 
-export function clearQueueStatuses(
-  statuses: QueueItemStatus[],
-  platform?: SourcePlatform,
-): Promise<QueueState> {
+export function clearQueueStatuses(statuses: QueueItemStatus[], platform?: SourcePlatform): Promise<QueueState> {
   return sendMessage<QueueState>({ type: "queue-clear-status", statuses, platform });
 }
 
@@ -266,11 +263,14 @@ export function runManualExport(
   downloadIds: number[];
   skipped: boolean;
 }> {
-  return sendMessage({
-    type: "manual-export-run",
-    sourceTabId,
-    options,
-  }, 60_000);
+  return sendMessage(
+    {
+      type: "manual-export-run",
+      sourceTabId,
+      options,
+    },
+    60_000,
+  );
 }
 
 export function getSettingsSnapshot(): Promise<QueueState> {

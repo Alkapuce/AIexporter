@@ -14,12 +14,11 @@ export async function loadThemeModeFromStorage(): Promise<ThemeMode> {
 }
 
 export function watchThemeModeFromStorage(onChange: (themeMode: ThemeMode) => void): () => void {
-  const handleChange = (
-    changes: Record<string, browser.storage.StorageChange>,
-    areaName: string,
-  ) => {
+  const handleChange = (changes: Record<string, browser.storage.StorageChange>, areaName: string) => {
     if (areaName !== "local" || !(QUEUE_STATE_STORAGE_KEY in changes)) return;
-    void loadThemeModeFromStorage().then(onChange).catch(() => undefined);
+    void loadThemeModeFromStorage()
+      .then(onChange)
+      .catch(() => undefined);
   };
 
   browser.storage.onChanged.addListener(handleChange);

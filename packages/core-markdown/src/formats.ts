@@ -22,7 +22,7 @@ function wrapBareUrls(markdown: string): string {
   return markdown.replace(urlPattern, (url, offset, input) => {
     const source = input as string;
     const index = Number(offset);
-    const previous = index > 0 ? source[index - 1] ?? "" : "";
+    const previous = index > 0 ? (source[index - 1] ?? "") : "";
     const next = source[index + url.length] ?? "";
     const previousPair = index >= 2 ? `${source[index - 2] ?? ""}${previous}` : previous;
     const insideMarkdownLink = previous === "(" && previousPair.endsWith("](");
@@ -71,7 +71,10 @@ function convertThinkingBlocksToDetails(markdown: string): string {
     }
     index -= 1;
 
-    const detailsBody = contentLines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+    const detailsBody = contentLines
+      .join("\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
     output.push("<details>");
     output.push("<summary>Thinking</summary>");
     output.push("");
@@ -267,7 +270,9 @@ function formatMessageBodyWithPreset(
     case "user-only":
       return message.role === "user" ? normalizeMessageSpacing(convertThinkingBlocksToDetails(body)) || null : null;
     case "assistant-only":
-      return message.role === "assistant" ? normalizeMessageSpacing(convertThinkingBlocksToDetails(body)) || null : null;
+      return message.role === "assistant"
+        ? normalizeMessageSpacing(convertThinkingBlocksToDetails(body)) || null
+        : null;
     case "code-only": {
       const codeBlocks = extractCodeBlocks(body);
       return codeBlocks.length > 0 ? codeBlocks.join("\n\n") : null;

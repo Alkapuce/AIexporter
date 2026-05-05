@@ -6,4 +6,3 @@ await app.listen({
   host: config.host,
   port: config.port,
 });
-

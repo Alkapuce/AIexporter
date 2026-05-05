@@ -77,7 +77,7 @@ export function markConversationIndexExportResult(
             latestExportRevision: exportState === "exported" ? revision : entry.latestExportRevision,
             latestExportCompatibilityVersion:
               exportState === "exported"
-                ? exportCompatibilityVersion ?? entry.latestExportCompatibilityVersion
+                ? (exportCompatibilityVersion ?? entry.latestExportCompatibilityVersion)
                 : entry.latestExportCompatibilityVersion,
             exportState,
             lastSeenAt: new Date().toISOString(),

@@ -79,7 +79,11 @@ describe("google platform DOM extraction", () => {
       { url: "https://gemini.google.com/app/conv-generic-title" },
     );
 
-    const bundle = extractGeminiConversationFromDom(dom.window.document, dom.window.location.href, "conv-generic-title");
+    const bundle = extractGeminiConversationFromDom(
+      dom.window.document,
+      dom.window.location.href,
+      "conv-generic-title",
+    );
 
     expect(bundle.title).toBe("美国主要城市气候介绍，和中国城市类比");
   });
@@ -128,7 +132,11 @@ describe("google platform DOM extraction", () => {
       { url: "https://aistudio.google.com/prompts/prompt-123" },
     );
 
-    const bundle = await extractAiStudioConversationFromDom(dom.window.document, dom.window.location.href, "prompt-123");
+    const bundle = await extractAiStudioConversationFromDom(
+      dom.window.document,
+      dom.window.location.href,
+      "prompt-123",
+    );
 
     expect(bundle.platform).toBe("aistudio");
     expect(bundle.meta?.model).toBe("Gemini 2.5 Pro");

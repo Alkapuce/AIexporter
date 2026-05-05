@@ -2,24 +2,16 @@ import { fileURLToPath } from "node:url";
 import { defineConfig } from "wxt";
 
 const workspaceAlias = {
-  "@aiexporter/adapter-sdk": fileURLToPath(
-    new URL("../../packages/adapter-sdk/src/index.ts", import.meta.url),
-  ),
+  "@aiexporter/adapter-sdk": fileURLToPath(new URL("../../packages/adapter-sdk/src/index.ts", import.meta.url)),
   "@aiexporter/adapters-chatgpt": fileURLToPath(
     new URL("../../packages/adapters-chatgpt/src/index.ts", import.meta.url),
   ),
   "@aiexporter/adapters-deepseek": fileURLToPath(
     new URL("../../packages/adapters-deepseek/src/index.ts", import.meta.url),
   ),
-  "@aiexporter/adapters-gemini": fileURLToPath(
-    new URL("../../packages/adapters-gemini/src/index.ts", import.meta.url),
-  ),
-  "@aiexporter/core-markdown": fileURLToPath(
-    new URL("../../packages/core-markdown/src/index.ts", import.meta.url),
-  ),
-  "@aiexporter/core-schema": fileURLToPath(
-    new URL("../../packages/core-schema/src/index.ts", import.meta.url),
-  ),
+  "@aiexporter/adapters-gemini": fileURLToPath(new URL("../../packages/adapters-gemini/src/index.ts", import.meta.url)),
+  "@aiexporter/core-markdown": fileURLToPath(new URL("../../packages/core-markdown/src/index.ts", import.meta.url)),
+  "@aiexporter/core-schema": fileURLToPath(new URL("../../packages/core-schema/src/index.ts", import.meta.url)),
 };
 
 export default defineConfig({
@@ -58,17 +50,13 @@ export default defineConfig({
     ],
     web_accessible_resources: [
       {
-        resources: [
-          "chatgpt-main-world.js",
-          "deepseek-main-world.js",
-          "gemini-main-world.js",
-        ],
-        matches: [
-          "https://chatgpt.com/*",
-          "https://chat.deepseek.com/*",
-          "https://gemini.google.com/*",
-        ],
+        resources: ["chatgpt-main-world.js", "deepseek-main-world.js", "gemini-main-world.js"],
+        matches: ["https://chatgpt.com/*", "https://chat.deepseek.com/*", "https://gemini.google.com/*"],
       },
     ],
+    content_security_policy: {
+      extension_pages:
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self' http://127.0.0.1:* http://localhost:* https://127.0.0.1:* https://localhost:*;",
+    },
   },
 });

@@ -18,4 +18,3 @@ export function decodeCursor(cursor?: string): { updatedAt: string; platform: st
     return null;
   }
 }
-

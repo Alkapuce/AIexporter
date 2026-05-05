@@ -64,7 +64,9 @@ function extractAiStudioUpdatedLabel(anchor: HTMLAnchorElement): string | undefi
   );
   const siblingText = anchor.parentElement?.nextElementSibling?.textContent;
   const updatedCell = candidateContainers
-    .map((container) => container.querySelector<HTMLElement>(".cdk-column-updated, .mat-column-updated, [data-column='updated']"))
+    .map((container) =>
+      container.querySelector<HTMLElement>(".cdk-column-updated, .mat-column-updated, [data-column='updated']"),
+    )
     .find(Boolean);
 
   const candidateTexts = [

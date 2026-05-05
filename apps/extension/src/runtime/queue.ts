@@ -41,7 +41,9 @@ export function mergeDiscoveryEvent(
     });
   }
 
-  const existingBySource = items.find((item) => item.event.platform === event.platform && item.event.sourceId === event.sourceId);
+  const existingBySource = items.find(
+    (item) => item.event.platform === event.platform && item.event.sourceId === event.sourceId,
+  );
   const existingBySourceIsActive =
     existingBySource?.status === "pending" ||
     existingBySource?.status === "processing" ||

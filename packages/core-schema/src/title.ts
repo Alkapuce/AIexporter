@@ -26,10 +26,7 @@ function looksLikeOpaqueIdentifier(value: string): boolean {
   return false;
 }
 
-export function isGenericConversationTitle(
-  title: string | undefined,
-  sourceId?: string,
-): boolean {
+export function isGenericConversationTitle(title: string | undefined, sourceId?: string): boolean {
   const normalized = normalizeWhitespace(title ?? "");
   if (!normalized) return true;
   if (GENERIC_TITLE_PATTERNS.some((pattern) => pattern.test(normalized))) return true;
@@ -37,10 +34,7 @@ export function isGenericConversationTitle(
   return looksLikeOpaqueIdentifier(normalized);
 }
 
-export function normalizeConversationTitle(
-  title: string | undefined,
-  sourceId?: string,
-): string | undefined {
+export function normalizeConversationTitle(title: string | undefined, sourceId?: string): string | undefined {
   const normalized = normalizeWhitespace(title ?? "");
   if (!normalized) return undefined;
   if (isGenericConversationTitle(normalized, sourceId)) return undefined;
@@ -69,7 +63,10 @@ export function extractFirstUserPromptTitle(bundle: ConversationBundle): string 
   return normalizeConversationTitle(sliced, bundle.sourceId);
 }
 
-export function resolveBundleTitle(bundle: ConversationBundle, preferredTitle?: string): {
+export function resolveBundleTitle(
+  bundle: ConversationBundle,
+  preferredTitle?: string,
+): {
   title: string;
   usedFallback: boolean;
   unresolved: boolean;
@@ -78,9 +75,7 @@ export function resolveBundleTitle(bundle: ConversationBundle, preferredTitle?: 
   const normalizedPreferredTitle = normalizeConversationTitle(preferredTitle, bundle.sourceId);
   const normalizedBundleTitle = normalizeConversationTitle(bundle.title, bundle.sourceId);
   const bundleLooksLikePromptFallback =
-    Boolean(normalizedBundleTitle) &&
-    Boolean(fallbackPromptTitle) &&
-    normalizedBundleTitle === fallbackPromptTitle;
+    Boolean(normalizedBundleTitle) && Boolean(fallbackPromptTitle) && normalizedBundleTitle === fallbackPromptTitle;
 
   if (normalizedPreferredTitle && (!normalizedBundleTitle || bundleLooksLikePromptFallback)) {
     return {

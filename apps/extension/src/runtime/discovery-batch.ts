@@ -48,7 +48,10 @@ export function createDiscoveryBatchSender(options: DiscoveryBatchSenderOptions)
   };
 
   const flush = async (reason: DiscoveryBatchFlushContext["reason"] = "manual") => {
-    flushChain = flushChain.then(() => flushInternal(reason), () => flushInternal(reason));
+    flushChain = flushChain.then(
+      () => flushInternal(reason),
+      () => flushInternal(reason),
+    );
     return flushChain;
   };
 

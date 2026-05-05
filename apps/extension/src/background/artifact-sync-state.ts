@@ -7,10 +7,7 @@ export interface ArtifactSyncState {
   lastCompletedAt?: string;
 }
 
-export function isAutomaticArtifactSyncDue(
-  lastCompletedAt: string | undefined,
-  nowMs = Date.now(),
-): boolean {
+export function isAutomaticArtifactSyncDue(lastCompletedAt: string | undefined, nowMs = Date.now()): boolean {
   if (!lastCompletedAt) {
     return true;
   }
@@ -28,28 +25,21 @@ export function canRunAutomaticArtifactSync(queueState: QueueState): boolean {
     return false;
   }
 
-  return !queueState.items.some(
-    (item) => item.status === "pending" || item.status === "processing",
-  );
+  return !queueState.items.some((item) => item.status === "pending" || item.status === "processing");
 }
 
 export async function loadArtifactSyncState(): Promise<ArtifactSyncState> {
   const raw = await browser.storage.local.get(ARTIFACT_SYNC_STATE_KEY);
-  const candidate = raw[ARTIFACT_SYNC_STATE_KEY] as
-    | ArtifactSyncState
-    | undefined;
+  const candidate = raw[ARTIFACT_SYNC_STATE_KEY] as ArtifactSyncState | undefined;
   return {
     lastCompletedAt:
-      typeof candidate?.lastCompletedAt === "string" &&
-      candidate.lastCompletedAt.trim().length > 0
+      typeof candidate?.lastCompletedAt === "string" && candidate.lastCompletedAt.trim().length > 0
         ? candidate.lastCompletedAt
         : undefined,
   };
 }
 
-export async function recordArtifactSyncCompleted(
-  at = new Date().toISOString(),
-): Promise<ArtifactSyncState> {
+export async function recordArtifactSyncCompleted(at = new Date().toISOString()): Promise<ArtifactSyncState> {
   const nextState: ArtifactSyncState = {
     lastCompletedAt: at,
   };

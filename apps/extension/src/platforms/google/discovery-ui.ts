@@ -157,8 +157,7 @@ export function createDiscoveryUiController(
 
   return {
     report(message, details) {
-      const suffix =
-        details && Object.keys(details).length > 0 ? ` ${JSON.stringify(details, null, 0)}` : "";
+      const suffix = details && Object.keys(details).length > 0 ? ` ${JSON.stringify(details, null, 0)}` : "";
       appendEntry(`${message}${suffix}`);
     },
     setMetrics(nextMetrics) {

@@ -50,9 +50,7 @@ describe("serializeConversation", () => {
         { id: "user", role: "user", name: "User" },
         { id: "assistant", role: "assistant", name: "ChatGPT" },
       ],
-      messages: [
-        { id: "m1", role: "user", markdown: "Hello", createdAt: "2026-03-18T07:59:00.000Z" },
-      ],
+      messages: [{ id: "m1", role: "user", markdown: "Hello", createdAt: "2026-03-18T07:59:00.000Z" }],
     };
 
     const result = serializeConversation(bundle, { revision: "time123" });
@@ -138,9 +136,7 @@ describe("serializeConversation", () => {
       url: "https://chat.deepseek.com/a/chat/s/conv-thinking",
       title: "Thinking Chat",
       extractedAt: "2026-03-18T08:00:00.000Z",
-      participants: [
-        { id: "assistant", role: "assistant", name: "DeepSeek" },
-      ],
+      participants: [{ id: "assistant", role: "assistant", name: "DeepSeek" }],
       messages: [
         {
           id: "m1",
@@ -269,9 +265,7 @@ describe("serializeConversation", () => {
       url: "https://aistudio.google.com/prompts/conv-bare-url",
       title: "Bare URL Chat",
       extractedAt: "2026-03-18T08:00:00.000Z",
-      participants: [
-        { id: "user", role: "user", name: "User" },
-      ],
+      participants: [{ id: "user", role: "user", name: "User" }],
       messages: [
         {
           id: "m1",

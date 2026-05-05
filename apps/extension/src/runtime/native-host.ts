@@ -126,11 +126,7 @@ export function pickFolderWithNativeHost(path?: string): Promise<NativeHostRespo
   return sendNativeMessage({ action: "pick-folder", path });
 }
 
-export function listFilesWithNativeHost(
-  path: string,
-  pattern = "*",
-  recursive = true,
-): Promise<NativeHostResponse> {
+export function listFilesWithNativeHost(path: string, pattern = "*", recursive = true): Promise<NativeHostResponse> {
   return sendNativeMessage({ action: "list-files", path, pattern, recursive });
 }
 

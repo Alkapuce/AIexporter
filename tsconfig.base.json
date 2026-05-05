@@ -11,24 +11,12 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "paths": {
-      "@aiexporter/core-schema": [
-        "packages/core-schema/src/index.ts"
-      ],
-      "@aiexporter/core-markdown": [
-        "packages/core-markdown/src/index.ts"
-      ],
-      "@aiexporter/adapter-sdk": [
-        "packages/adapter-sdk/src/index.ts"
-      ],
-      "@aiexporter/adapters-chatgpt": [
-        "packages/adapters-chatgpt/src/index.ts"
-      ],
-      "@aiexporter/adapters-gemini": [
-        "packages/adapters-gemini/src/index.ts"
-      ],
-      "@aiexporter/adapters-deepseek": [
-        "packages/adapters-deepseek/src/index.ts"
-      ]
+      "@aiexporter/core-schema": ["packages/core-schema/src/index.ts"],
+      "@aiexporter/core-markdown": ["packages/core-markdown/src/index.ts"],
+      "@aiexporter/adapter-sdk": ["packages/adapter-sdk/src/index.ts"],
+      "@aiexporter/adapters-chatgpt": ["packages/adapters-chatgpt/src/index.ts"],
+      "@aiexporter/adapters-gemini": ["packages/adapters-gemini/src/index.ts"],
+      "@aiexporter/adapters-deepseek": ["packages/adapters-deepseek/src/index.ts"]
     },
     "declaration": true,
     "declarationMap": true,

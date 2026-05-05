@@ -90,7 +90,8 @@ The extension dashboard provides:
 ## Important documentation
 - `README.md` - detailed status, layout, archive format, server API.
 - `AGENTS.md` - repository guidelines (build, test, commit style).
-- `docs/refactor-roadmap.md` - current debt register and next refactor targets.
+- `CONTRIBUTING.md` - contribution guidelines and PR process.
+- `CHANGELOG.md` - version history and release notes.
 - `docs/browser-live-testing.md` - Edge/CDP/Playwright testing notes.
 
 ## Commit style

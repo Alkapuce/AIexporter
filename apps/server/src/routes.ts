@@ -87,4 +87,3 @@ export async function registerRoutes(
     return reply.send(ConversationDetailsResponseSchema.parse(response));
   });
 }
-

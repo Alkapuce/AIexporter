@@ -10,11 +10,7 @@ import {
 import { normalizeConversationUrl } from "@aiexporter/core-schema";
 import { buildDeepSeekApiHeaders } from "./browser-context";
 
-type RuntimeLogger = (
-  level: DebugLogLevel,
-  message: string,
-  details?: Record<string, unknown>,
-) => Promise<void>;
+type RuntimeLogger = (level: DebugLogLevel, message: string, details?: Record<string, unknown>) => Promise<void>;
 
 const DISCOVERY_LINK_SELECTOR = 'a[href*="/a/chat/s/"]';
 const DISCOVERY_LINK_POLL_MS = 250;
@@ -295,7 +291,10 @@ function getSidebarScrollContainer(documentRef: Document): HTMLElement | null {
   let current: HTMLElement | null = firstConversationLink.parentElement;
   while (current) {
     const style = window.getComputedStyle(current);
-    if (current.scrollHeight > current.clientHeight + 200 && (style.overflowY === "auto" || style.overflowY === "scroll")) {
+    if (
+      current.scrollHeight > current.clientHeight + 200 &&
+      (style.overflowY === "auto" || style.overflowY === "scroll")
+    ) {
       return current;
     }
     current = current.parentElement;
@@ -319,17 +318,15 @@ function getDeepSeekSidebarToggleButton(documentRef: Document): HTMLElement | nu
     if (match) return match;
   }
 
-  return Array.from(documentRef.querySelectorAll<HTMLElement>("button, [role='button']")).find((candidate) => {
-    const label = [
-      candidate.getAttribute("aria-label"),
-      candidate.getAttribute("title"),
-      candidate.textContent,
-    ]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
-    return label.includes("sidebar") || label.includes("history") || label.includes("menu");
-  }) ?? null;
+  return (
+    Array.from(documentRef.querySelectorAll<HTMLElement>("button, [role='button']")).find((candidate) => {
+      const label = [candidate.getAttribute("aria-label"), candidate.getAttribute("title"), candidate.textContent]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return label.includes("sidebar") || label.includes("history") || label.includes("menu");
+    }) ?? null
+  );
 }
 
 async function ensureDeepSeekSidebarVisible(documentRef: Document, log: RuntimeLogger): Promise<void> {
@@ -497,7 +494,10 @@ export async function collectHistoricalPayloads(
   collectVisiblePayloads();
 
   for (let step = 0; step < SIDEBAR_SCROLL_MAX_STEPS; step += 1) {
-    const nextScrollTop = Math.min(container.scrollHeight, container.scrollTop + container.clientHeight * SIDEBAR_SCROLL_STEP_RATIO);
+    const nextScrollTop = Math.min(
+      container.scrollHeight,
+      container.scrollTop + container.clientHeight * SIDEBAR_SCROLL_STEP_RATIO,
+    );
     if (nextScrollTop !== container.scrollTop) {
       container.scrollTop = nextScrollTop;
       await new Promise((resolve) => window.setTimeout(resolve, SIDEBAR_SCROLL_SETTLE_MS));

@@ -33,8 +33,14 @@ interface SettingsTabProps {
   onLocaleChange: (locale: UiLocale) => void;
   onThemeModeChange: (themeMode: ThemeMode) => void;
   onGlobalSettingChange: <K extends keyof ExtensionSettings>(key: K, value: ExtensionSettings[K]) => void;
-  onSchedulerChange: <K extends keyof ExtensionSettings["scheduler"]>(key: K, value: ExtensionSettings["scheduler"][K]) => void;
-  onDownloadsChange: <K extends keyof ExtensionSettings["downloads"]>(key: K, value: ExtensionSettings["downloads"][K]) => void;
+  onSchedulerChange: <K extends keyof ExtensionSettings["scheduler"]>(
+    key: K,
+    value: ExtensionSettings["scheduler"][K],
+  ) => void;
+  onDownloadsChange: <K extends keyof ExtensionSettings["downloads"]>(
+    key: K,
+    value: ExtensionSettings["downloads"][K],
+  ) => void;
   onPlatformChange: <K extends keyof PlatformRuntimeConfig>(key: K, value: PlatformRuntimeConfig[K]) => void;
   onCommitGlobalSettings: (patch: Partial<ExtensionSettings>) => void;
   onCommitDownloads: (patch: Partial<ExtensionSettings["downloads"]>) => void;
@@ -153,17 +159,29 @@ export function SettingsTab({
           </label>
           <label style={{ display: "grid", gap: 6 }}>
             <span>{t("settings.language")}</span>
-            <select style={inputStyle} value={locale} onChange={(event) => onLocaleChange(event.target.value as UiLocale)}>
+            <select
+              style={inputStyle}
+              value={locale}
+              onChange={(event) => onLocaleChange(event.target.value as UiLocale)}
+            >
               <option value="zh-CN">{t("common.languageChinese")}</option>
               <option value="en">{t("common.languageEnglish")}</option>
             </select>
           </label>
           <label style={{ display: "grid", gap: 6 }}>
             <span>{t("settings.themeMode")}</span>
-            <select style={inputStyle} value={themeMode} onChange={(event) => onThemeModeChange(event.target.value as ThemeMode)}>
+            <select
+              style={inputStyle}
+              value={themeMode}
+              onChange={(event) => onThemeModeChange(event.target.value as ThemeMode)}
+            >
               {THEME_MODES.map((mode) => (
                 <option key={mode} value={mode}>
-                  {mode === "system" ? t("common.themeSystem") : mode === "light" ? t("common.themeLight") : t("common.themeDark")}
+                  {mode === "system"
+                    ? t("common.themeSystem")
+                    : mode === "light"
+                      ? t("common.themeLight")
+                      : t("common.themeDark")}
                 </option>
               ))}
             </select>
@@ -190,11 +208,17 @@ export function SettingsTab({
               placeholder={t("settings.downloads.exportRootPlaceholder")}
               value={settingsDraft.downloads.exportRootPath ?? ""}
               onChange={(event) => onDownloadsChange("exportRootPath", event.target.value || undefined)}
-              onBlur={() => onCommitDownloads({ exportRootPath: settingsDraft.downloads.exportRootPath?.trim() || undefined })}
+              onBlur={() =>
+                onCommitDownloads({ exportRootPath: settingsDraft.downloads.exportRootPath?.trim() || undefined })
+              }
             />
           </label>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-            <ActionButton disabled={busy} style={{ background: "var(--aiexporter-button-secondary-background)" }} onClick={onPickExportRoot}>
+            <ActionButton
+              disabled={busy}
+              style={{ background: "var(--aiexporter-button-secondary-background)" }}
+              onClick={onPickExportRoot}
+            >
               {t("settings.downloads.browseExportRoot")}
             </ActionButton>
             <ActionButton
@@ -207,7 +231,11 @@ export function SettingsTab({
             >
               {t("settings.downloads.useDefaultExportRoot")}
             </ActionButton>
-            <ActionButton disabled={busy} style={{ background: "var(--aiexporter-button-accent-background)" }} onClick={onSyncArtifacts}>
+            <ActionButton
+              disabled={busy}
+              style={{ background: "var(--aiexporter-button-accent-background)" }}
+              onClick={onSyncArtifacts}
+            >
               {t("settings.downloads.syncLocalArtifacts")}
             </ActionButton>
           </div>
@@ -238,7 +266,9 @@ export function SettingsTab({
               min={1}
               value={String(settingsDraft.downloads.archiveRetentionDays ?? 7)}
               onChange={(event) => onDownloadsChange("archiveRetentionDays", Number(event.target.value))}
-              onBlur={() => onCommitDownloads({ archiveRetentionDays: settingsDraft.downloads.archiveRetentionDays ?? 7 })}
+              onBlur={() =>
+                onCommitDownloads({ archiveRetentionDays: settingsDraft.downloads.archiveRetentionDays ?? 7 })
+              }
             />
           </label>
           <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -263,7 +293,9 @@ export function SettingsTab({
               }}
             />
           </label>
-          <div style={{ color: "var(--aiexporter-text-muted-color)", fontSize: 12 }}>{t("settings.downloads.retainLocalRevisionCountDeprecated")}</div>
+          <div style={{ color: "var(--aiexporter-text-muted-color)", fontSize: 12 }}>
+            {t("settings.downloads.retainLocalRevisionCountDeprecated")}
+          </div>
           <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span>{t("settings.downloads.openFileActionsEnabled")}</span>
             <input
@@ -279,7 +311,9 @@ export function SettingsTab({
       </div>
 
       <div style={cardStyle}>
-        <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 12 }}>{platformLabel} {t("settings.platformTitle")}</div>
+        <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 12 }}>
+          {platformLabel} {t("settings.platformTitle")}
+        </div>
         <div style={{ display: "grid", gap: 12 }}>
           <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span>{t("settings.serviceEnabled")}</span>
@@ -336,20 +370,37 @@ export function SettingsTab({
               }}
             />
           </label>
-          <div style={{ display: "grid", gap: 8, border: "1px solid var(--aiexporter-border-color)", borderRadius: 12, padding: 12, background: "var(--aiexporter-surface-muted-background)" }}>
+          <div
+            style={{
+              display: "grid",
+              gap: 8,
+              border: "1px solid var(--aiexporter-border-color)",
+              borderRadius: 12,
+              padding: 12,
+              background: "var(--aiexporter-surface-muted-background)",
+            }}
+          >
             <div style={{ display: "grid", gap: 4 }}>
               <span style={{ fontWeight: 600 }}>{t("settings.discoverySweepIntervalMs")}</span>
               <span style={{ color: "var(--aiexporter-text-muted-color)", fontSize: 12 }}>
-                {t("settings.discoverySweepIntervalSummary")}: {formatDurationMs(platformDraft.discoverySweepIntervalMs)}
+                {t("settings.discoverySweepIntervalSummary")}:{" "}
+                {formatDurationMs(platformDraft.discoverySweepIntervalMs)}
               </span>
-              <span style={{ color: "var(--aiexporter-text-soft-color)", fontSize: 12 }}>{t("settings.discoverySweepIntervalHelp")}</span>
+              <span style={{ color: "var(--aiexporter-text-soft-color)", fontSize: 12 }}>
+                {t("settings.discoverySweepIntervalHelp")}
+              </span>
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {discoverySweepIntervalPresets.map((preset) => (
                 <ActionButton
                   key={preset}
                   disabled={busy}
-                style={{ background: platformDraft.discoverySweepIntervalMs === preset ? "var(--aiexporter-button-primary-background)" : "var(--aiexporter-button-secondary-background)" }}
+                  style={{
+                    background:
+                      platformDraft.discoverySweepIntervalMs === preset
+                        ? "var(--aiexporter-button-primary-background)"
+                        : "var(--aiexporter-button-secondary-background)",
+                  }}
                   onClick={() => {
                     onPlatformChange("discoverySweepIntervalMs", preset);
                     onCommitPlatform({ discoverySweepIntervalMs: preset });
@@ -368,7 +419,9 @@ export function SettingsTab({
                 step={60_000}
                 value={String(platformDraft.discoverySweepIntervalMs)}
                 onChange={(event) => onPlatformChange("discoverySweepIntervalMs", Number(event.target.value))}
-                onBlur={() => onCommitPlatform({ discoverySweepIntervalMs: Number(platformDraft.discoverySweepIntervalMs) })}
+                onBlur={() =>
+                  onCommitPlatform({ discoverySweepIntervalMs: Number(platformDraft.discoverySweepIntervalMs) })
+                }
               />
             </label>
           </div>
@@ -381,15 +434,26 @@ export function SettingsTab({
                 min={field === "maxConcurrency" ? 1 : undefined}
                 value={String(platformDraft[field])}
                 onChange={(event) => onPlatformChange(field, Number(event.target.value))}
-                onBlur={() => onCommitPlatform({ [field]: Number(platformDraft[field]) } as Partial<PlatformRuntimeConfig>)}
+                onBlur={() =>
+                  onCommitPlatform({ [field]: Number(platformDraft[field]) } as Partial<PlatformRuntimeConfig>)
+                }
               />
             </label>
           ))}
           {platformKey === "gemini" ? (
-            <details style={{ border: "1px solid var(--aiexporter-border-color)", borderRadius: 12, padding: 12, background: "var(--aiexporter-surface-muted-background)" }}>
+            <details
+              style={{
+                border: "1px solid var(--aiexporter-border-color)",
+                borderRadius: 12,
+                padding: 12,
+                background: "var(--aiexporter-surface-muted-background)",
+              }}
+            >
               <summary style={{ cursor: "pointer", fontWeight: 700 }}>{t("settings.discoveryAdvancedTitle")}</summary>
               <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
-                <div style={{ color: "var(--aiexporter-text-muted-color)", fontSize: 12 }}>{t("settings.discoveryAdvancedHelp")}</div>
+                <div style={{ color: "var(--aiexporter-text-muted-color)", fontSize: 12 }}>
+                  {t("settings.discoveryAdvancedHelp")}
+                </div>
                 {advancedDiscoveryFields.map(([labelKey, field]) => (
                   <label key={field} style={{ display: "grid", gap: 6 }}>
                     <span>{t(labelKey)}</span>
@@ -410,9 +474,17 @@ export function SettingsTab({
           ) : null}
           <label style={{ display: "grid", gap: 6 }}>
             <span>{t("settings.apiExtractMode")}</span>
-              <input style={{ ...inputStyle, background: "var(--aiexporter-input-muted-background)" }} value={platformDraft.apiExtractMode} readOnly />
+            <input
+              style={{ ...inputStyle, background: "var(--aiexporter-input-muted-background)" }}
+              value={platformDraft.apiExtractMode}
+              readOnly
+            />
           </label>
-          <ActionButton disabled={busy} style={{ background: "var(--aiexporter-button-danger-background)", justifySelf: "start" }} onClick={onClearPlatformRecords}>
+          <ActionButton
+            disabled={busy}
+            style={{ background: "var(--aiexporter-button-danger-background)", justifySelf: "start" }}
+            onClick={onClearPlatformRecords}
+          >
             {t("settings.clearPlatformRecords")}
           </ActionButton>
         </div>

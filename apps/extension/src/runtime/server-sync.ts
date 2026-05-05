@@ -8,6 +8,17 @@ export async function syncBundleToServer(
 ): Promise<void> {
   if (!settings.syncToServer) return;
 
+  // Validate server URL is localhost-only
+  if (!URL.canParse(settings.serverUrl)) {
+    console.warn(`[AIexporter] Server sync blocked: invalid serverUrl "${settings.serverUrl}"`);
+    return;
+  }
+  const parsedUrl = new URL(settings.serverUrl);
+  if (!["localhost", "127.0.0.1", "::1"].includes(parsedUrl.hostname)) {
+    console.warn(`[AIexporter] Server sync blocked: serverUrl must be localhost, got ${parsedUrl.hostname}`);
+    return;
+  }
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10_000);
 

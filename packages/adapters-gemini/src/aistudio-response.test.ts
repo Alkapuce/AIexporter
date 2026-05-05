@@ -34,17 +34,7 @@ describe("extractAiStudioConversationFromResolvedPromptPayload", () => {
         null,
         null,
         [
-          [
-            "User asks a question",
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            "user",
-          ],
+          ["User asks a question", null, null, null, null, null, null, null, "user"],
           [
             "**Analyzing the Problem**\n\nFirst paragraph.\n\nSecond paragraph.",
             null,
@@ -137,7 +127,9 @@ describe("extractAiStudioConversationFromResolvedPromptPayload", () => {
     expect(bundle.messages[1]?.markdown).toContain("> **Analyzing the Problem**");
     expect(bundle.messages[2]?.markdown).toContain("Final answer body.");
     expect(bundle.messages[3]?.markdown).toContain("data:image/png;base64,aGVsbG8=");
-    expect(bundle.messages[3]?.markdown).toContain("[Google Drive resource drive-file-id](https://drive.google.com/open?id=drive-file-id)");
+    expect(bundle.messages[3]?.markdown).toContain(
+      "[Google Drive resource drive-file-id](https://drive.google.com/open?id=drive-file-id)",
+    );
     expect(Array.isArray(bundle.meta?.linkedAttachments)).toBe(true);
   });
 
@@ -148,13 +140,7 @@ describe("extractAiStudioConversationFromResolvedPromptPayload", () => {
         null,
         null,
         [1, null, "models/gemini-3-flash-preview"],
-        [
-          "Prompt With Alt Attachments",
-          null,
-          null,
-          null,
-          [["1775700946", 126000000]],
-        ],
+        ["Prompt With Alt Attachments", null, null, null, [["1775700946", 126000000]]],
         null,
         null,
         null,
@@ -224,13 +210,7 @@ describe("extractAiStudioConversationFromResolvedPromptPayload", () => {
         null,
         null,
         [1, null, "models/gemini-3-flash-preview"],
-        [
-          "Prompt With Text Attachments",
-          null,
-          null,
-          null,
-          [["1775700946", 126000000]],
-        ],
+        ["Prompt With Text Attachments", null, null, null, [["1775700946", 126000000]]],
         null,
         null,
         null,

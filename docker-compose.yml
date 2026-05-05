@@ -11,4 +11,3 @@ services:
       AIEXPORTER_DATA_DIR: /app/data
     volumes:
       - ./data:/app/data
-

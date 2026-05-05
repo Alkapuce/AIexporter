@@ -37,7 +37,9 @@ interface DownloadSearchResult {
 }
 
 async function findExistingCompletedDownload(filename: string): Promise<DownloadedAsset | null> {
-  const matches = (await browser.downloads.search({ state: "complete" } as browser.downloads.DownloadQuery)) as DownloadSearchResult[];
+  const matches = (await browser.downloads.search({
+    state: "complete",
+  } as browser.downloads.DownloadQuery)) as DownloadSearchResult[];
   const normalizedExpected = filename.replace(/\//g, "\\").toLowerCase();
   const existing = matches
     .filter(

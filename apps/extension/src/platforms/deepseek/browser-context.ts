@@ -4,10 +4,7 @@ export interface JsonStorageLike {
   getItem(key: string): string | null;
 }
 
-export function getStoredValue<T = string>(
-  key: string,
-  storage: JsonStorageLike = window.localStorage,
-): T | undefined {
+export function getStoredValue<T = string>(key: string, storage: JsonStorageLike = window.localStorage): T | undefined {
   const raw = storage.getItem(key);
   if (!raw) return undefined;
 
@@ -22,10 +19,12 @@ export function getStoredValue<T = string>(
   }
 }
 
-export function buildDeepSeekApiHeaders(options: {
-  storage?: JsonStorageLike;
-  navigatorLanguage?: string;
-} = {}): Record<string, string> {
+export function buildDeepSeekApiHeaders(
+  options: {
+    storage?: JsonStorageLike;
+    navigatorLanguage?: string;
+  } = {},
+): Record<string, string> {
   const storage = options.storage ?? window.localStorage;
   const navigatorLanguage = options.navigatorLanguage ?? navigator.language;
   const token = getStoredValue<string>("userToken", storage);

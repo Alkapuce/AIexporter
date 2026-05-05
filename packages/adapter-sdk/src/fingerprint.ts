@@ -13,16 +13,10 @@ async function toSha256Hex(value: string): Promise<string> {
     .join("");
 }
 
-export async function buildDiscoveryFingerprint(
-  platform: string,
-  payload: BridgeNetworkPayload,
-): Promise<string> {
-  return toSha256Hex([
-    AIEXPORTER_EXPORT_SCHEMA_VERSION,
-    platform,
-    payload.sourceId,
-    payload.sourceUpdatedAt ?? "",
-  ].join("::"));
+export async function buildDiscoveryFingerprint(platform: string, payload: BridgeNetworkPayload): Promise<string> {
+  return toSha256Hex(
+    [AIEXPORTER_EXPORT_SCHEMA_VERSION, platform, payload.sourceId, payload.sourceUpdatedAt ?? ""].join("::"),
+  );
 }
 
 export async function buildBundleRevision(bundle: ConversationBundle): Promise<string> {

@@ -97,7 +97,10 @@ describe("google platform discovery", () => {
             null,
             ["peijin qiu", 1, "https://example.com/avatar.png"],
             null,
-            [["1775658791", 874000000], ["peijin qiu", 1, "https://example.com/avatar.png"]],
+            [
+              ["1775658791", 874000000],
+              ["peijin qiu", 1, "https://example.com/avatar.png"],
+            ],
           ],
         ],
         [
@@ -110,7 +113,10 @@ describe("google platform discovery", () => {
             null,
             ["peijin qiu", 1, "https://example.com/avatar.png"],
             null,
-            [["1775640848", 973000000], ["peijin qiu", 1, "https://example.com/avatar.png"]],
+            [
+              ["1775640848", 973000000],
+              ["peijin qiu", 1, "https://example.com/avatar.png"],
+            ],
           ],
         ],
       ],
@@ -293,9 +299,9 @@ describe("google platform discovery", () => {
     expect(bundle.messages[0]?.markdown).toBe("第一问");
     expect(bundle.messages[1]?.markdown).toContain("第一答复");
     expect(bundle.messages[1]?.markdown).toContain("[thinking]");
-  expect(bundle.messages[3]?.markdown).toContain("第二答复");
-  expect(bundle.sourceUpdatedAt).toBe("2026-04-09T02:01:40.222Z");
-  expect(bundle.meta?.source).toBe("page-world-rpc");
+    expect(bundle.messages[3]?.markdown).toContain("第二答复");
+    expect(bundle.sourceUpdatedAt).toBe("2026-04-09T02:01:40.222Z");
+    expect(bundle.meta?.source).toBe("page-world-rpc");
   });
 
   it("extracts Gemini uploaded image attachments from page-world RPC responses", () => {
@@ -338,14 +344,7 @@ describe("google platform discovery", () => {
             ],
           ],
         ],
-        [
-          [
-            [
-              "resp-1",
-              ["带图答复"],
-            ],
-          ],
-        ],
+        [[["resp-1", ["带图答复"]]]],
         [1775700100, 111000000],
       ],
     ];
@@ -358,7 +357,9 @@ describe("google platform discovery", () => {
       "With Images",
     );
 
-    expect(bundle.messages[0]?.markdown).toContain("![photo-1.jpg](https://lh3.googleusercontent.com/gg/example-photo-1)");
+    expect(bundle.messages[0]?.markdown).toContain(
+      "![photo-1.jpg](https://lh3.googleusercontent.com/gg/example-photo-1)",
+    );
     expect(bundle.messages[0]?.markdown).toContain("带图提问");
   });
 
@@ -379,21 +380,34 @@ describe("google platform discovery", () => {
                 null,
                 null,
                 [
-                  [null, 1, "photo-1.jpg", "https://lh3.googleusercontent.com/gg/example-photo-1", null, "token-1", null, null, 6],
-                  [null, 1, "photo-2.jpg", "https://lh3.googleusercontent.com/gg/example-photo-2", null, "token-2", null, null, 6],
+                  [
+                    null,
+                    1,
+                    "photo-1.jpg",
+                    "https://lh3.googleusercontent.com/gg/example-photo-1",
+                    null,
+                    "token-1",
+                    null,
+                    null,
+                    6,
+                  ],
+                  [
+                    null,
+                    1,
+                    "photo-2.jpg",
+                    "https://lh3.googleusercontent.com/gg/example-photo-2",
+                    null,
+                    "token-2",
+                    null,
+                    null,
+                    6,
+                  ],
                 ],
               ],
             ],
           ],
         ],
-        [
-          [
-            [
-              "resp-2",
-              ["第二答复"],
-            ],
-          ],
-        ],
+        [[["resp-2", ["第二答复"]]]],
         [1775700200, 0],
       ],
       [
@@ -411,20 +425,23 @@ describe("google platform discovery", () => {
                 null,
                 null,
                 [
-                  [null, 1, "photo-1.jpg", "https://lh3.googleusercontent.com/gg/example-photo-1", null, "token-1", null, null, 6],
+                  [
+                    null,
+                    1,
+                    "photo-1.jpg",
+                    "https://lh3.googleusercontent.com/gg/example-photo-1",
+                    null,
+                    "token-1",
+                    null,
+                    null,
+                    6,
+                  ],
                 ],
               ],
             ],
           ],
         ],
-        [
-          [
-            [
-              "resp-1",
-              ["第一答复"],
-            ],
-          ],
-        ],
+        [[["resp-1", ["第一答复"]]]],
         [1775700100, 0],
       ],
     ];
@@ -458,9 +475,7 @@ describe("google platform discovery", () => {
           [
             [
               "resp-demo",
-              [
-                "先看这个可视化演示：\n\n```json\n{\"miniApp\":{\"spec\":\"...\",\"id\":\"im_demo123abc\"}}\n```\n\n再继续分析。",
-              ],
+              ['先看这个可视化演示：\n\n```json\n{"miniApp":{"spec":"...","id":"im_demo123abc"}}\n```\n\n再继续分析。'],
             ],
           ],
         ],
@@ -476,8 +491,10 @@ describe("google platform discovery", () => {
       "Demo Conversation",
     );
 
-    expect(bundle.messages[1]?.markdown).toContain("> [interactive] [Open Gemini visualization demo (im_demo123abc)](https://gemini.google.com/app/demo-conv)");
+    expect(bundle.messages[1]?.markdown).toContain(
+      "> [interactive] [Open Gemini visualization demo (im_demo123abc)](https://gemini.google.com/app/demo-conv)",
+    );
     expect(bundle.messages[1]?.markdown).toContain("再继续分析。");
-    expect(bundle.messages[1]?.markdown).not.toContain("\"miniApp\"");
+    expect(bundle.messages[1]?.markdown).not.toContain('"miniApp"');
   });
 });

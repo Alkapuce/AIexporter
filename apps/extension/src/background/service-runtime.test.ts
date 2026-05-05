@@ -6,10 +6,7 @@ import type {
   PlatformServiceState,
   QueueState,
 } from "@aiexporter/adapter-sdk";
-import {
-  AIEXPORTER_EXPORT_COMPATIBILITY_VERSION,
-  DEFAULT_EXTENSION_SETTINGS,
-} from "@aiexporter/adapter-sdk";
+import { AIEXPORTER_EXPORT_COMPATIBILITY_VERSION, DEFAULT_EXTENSION_SETTINGS } from "@aiexporter/adapter-sdk";
 
 const storage = vi.hoisted(() => ({
   queueState: undefined as QueueState | undefined,
@@ -100,8 +97,7 @@ vi.mock("./artifact-sync-state", () => ({
 }));
 
 vi.mock("./tab-runtime", async () => {
-  const actual =
-    await vi.importActual<typeof import("./tab-runtime")>("./tab-runtime");
+  const actual = await vi.importActual<typeof import("./tab-runtime")>("./tab-runtime");
   return {
     ...actual,
     closeWorkerTab: tabRuntimeMocks.closeWorkerTab,
@@ -229,9 +225,7 @@ function createQueueState(): QueueState {
   };
 }
 
-function createGeminiConversationIndex(
-  count: number,
-): ConversationIndexEntry[] {
+function createGeminiConversationIndex(count: number): ConversationIndexEntry[] {
   return Array.from({ length: count }, (_, index) => ({
     platform: "gemini",
     sourceId: `gemini-${index + 1}`,
@@ -254,9 +248,7 @@ function withGeminiBackfillEnabled(
   return {
     ...state,
     items: state.items.filter((item) => item.platform !== "gemini"),
-    activeWorkers: state.activeWorkers.filter(
-      (worker) => worker.platform !== "gemini",
-    ),
+    activeWorkers: state.activeWorkers.filter((worker) => worker.platform !== "gemini"),
     settings: {
       ...state.settings,
       platforms: {
@@ -384,13 +376,10 @@ describe("background service runtime", () => {
   });
 
   it("keeps a reused worker lease when its previous tab id is stale", async () => {
-    const { createBackgroundServiceRuntime } =
-      await import("./service-runtime");
+    const { createBackgroundServiceRuntime } = await import("./service-runtime");
 
     createBackgroundServiceRuntime().requestPlatformTick("deepseek");
-    await waitForCondition(
-      () => persistenceMocks.persistBundle.mock.calls.length > 0,
-    );
+    await waitForCondition(() => persistenceMocks.persistBundle.mock.calls.length > 0);
 
     expect(globalThis.browser.tabs.create).toHaveBeenCalledWith({
       active: false,
@@ -407,15 +396,11 @@ describe("background service runtime", () => {
     ]);
 
     resolvePersistBundle?.();
-    await waitForCondition(
-      () => persistenceMocks.markBundleExportResult.mock.calls.length > 0,
-    );
+    await waitForCondition(() => persistenceMocks.markBundleExportResult.mock.calls.length > 0);
   });
 
   it("does not start Gemini best-effort discovery on resume when the cadence is still fresh", async () => {
-    const dateNow = vi
-      .spyOn(Date, "now")
-      .mockReturnValue(Date.parse("2026-04-24T12:43:27.000Z"));
+    const dateNow = vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-04-24T12:43:27.000Z"));
     storage.conversationIndex = createGeminiConversationIndex(790);
     storage.queueState = withGeminiBackfillEnabled(createQueueState(), {
       lastDiscoveryAt: undefined,
@@ -427,16 +412,13 @@ describe("background service runtime", () => {
       },
     });
 
-    const { createBackgroundServiceRuntime } =
-      await import("./service-runtime");
+    const { createBackgroundServiceRuntime } = await import("./service-runtime");
     const runtime = createBackgroundServiceRuntime();
 
     runtime.requestPlatformStartupCatchup("gemini");
     await runtime.updatePlatformDesiredRunning("gemini", true);
 
-    await waitForCondition(
-      () => vi.mocked(globalThis.browser.alarms.create).mock.calls.length > 0,
-    );
+    await waitForCondition(() => vi.mocked(globalThis.browser.alarms.create).mock.calls.length > 0);
     expect(globalThis.browser.tabs.create).not.toHaveBeenCalled();
     expect(tabRuntimeMocks.requestTabRuntimeMessage).not.toHaveBeenCalled();
 
@@ -448,14 +430,11 @@ describe("background service runtime", () => {
     tabRuntimeMocks.requestTabRuntimeMessage.mockResolvedValue([]);
     storage.queueState = withGeminiBackfillEnabled(createQueueState());
 
-    const { createBackgroundServiceRuntime } =
-      await import("./service-runtime");
+    const { createBackgroundServiceRuntime } = await import("./service-runtime");
     const runtime = createBackgroundServiceRuntime();
 
     await runtime.updatePlatformDesiredRunning("gemini", true);
-    await waitForCondition(
-      () => tabRuntimeMocks.requestTabRuntimeMessage.mock.calls.length > 0,
-    );
+    await waitForCondition(() => tabRuntimeMocks.requestTabRuntimeMessage.mock.calls.length > 0);
 
     expect(tabRuntimeMocks.requestTabRuntimeMessage).toHaveBeenCalledWith(
       456,

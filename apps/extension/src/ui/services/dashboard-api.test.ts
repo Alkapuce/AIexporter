@@ -48,11 +48,7 @@ describe("dashboard file actions", () => {
 
     openSourceUrl("https://gemini.google.com/app/conv-1?aiexporter_worker=1&aiexporter_discovery=1&hl=zh-CN");
 
-    expect(open).toHaveBeenCalledWith(
-      "https://gemini.google.com/app/conv-1?hl=zh-CN",
-      "_blank",
-      "noopener,noreferrer",
-    );
+    expect(open).toHaveBeenCalledWith("https://gemini.google.com/app/conv-1?hl=zh-CN", "_blank", "noopener,noreferrer");
   });
 
   it("recognizes the active supported conversation tab in popup mode", async () => {

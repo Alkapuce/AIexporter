@@ -182,9 +182,7 @@ export class ArchiveDatabase {
 
     const cursor = decodeCursor(query.cursor);
     if (cursor) {
-      whereClauses.push(
-        "(updated_at < ? OR (updated_at = ? AND (platform > ? OR (platform = ? AND source_id > ?))))",
-      );
+      whereClauses.push("(updated_at < ? OR (updated_at = ? AND (platform > ? OR (platform = ? AND source_id > ?))))");
       params.push(cursor.updatedAt, cursor.updatedAt, cursor.platform, cursor.platform, cursor.sourceId);
     }
 
@@ -257,4 +255,3 @@ export class ArchiveDatabase {
     };
   }
 }
-

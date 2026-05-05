@@ -1,4 +1,9 @@
-import { buildDiscoveryFingerprint, type DebugLogLevel, type MainWorldBridgeMessage, type RuntimeMessage } from "@aiexporter/adapter-sdk";
+import {
+  buildDiscoveryFingerprint,
+  type DebugLogLevel,
+  type MainWorldBridgeMessage,
+  type RuntimeMessage,
+} from "@aiexporter/adapter-sdk";
 import { extractSessionIdFromUrl } from "@aiexporter/adapters-deepseek";
 import { createDiscoveryBatchSender } from "../../runtime/discovery-batch";
 import { isDeepSeekWorkerPageContext } from "./browser-context";
@@ -10,11 +15,7 @@ declare global {
   }
 }
 
-type RuntimeLogger = (
-  level: DebugLogLevel,
-  message: string,
-  details?: Record<string, unknown>,
-) => Promise<void>;
+type RuntimeLogger = (level: DebugLogLevel, message: string, details?: Record<string, unknown>) => Promise<void>;
 
 export interface PassiveDiscoveryMessageCheck {
   isWorkerPage: boolean;
@@ -31,10 +32,10 @@ export function shouldHandleDeepSeekPassiveDiscovery({
 }: PassiveDiscoveryMessageCheck): boolean {
   return Boolean(
     !isWorkerPage &&
-      eventSource === expectedSource &&
-      data?.source === "aiexporter" &&
-      data.type === "deepseek-network-discovery" &&
-      data.payload,
+    eventSource === expectedSource &&
+    data?.source === "aiexporter" &&
+    data.type === "deepseek-network-discovery" &&
+    data.payload,
   );
 }
 

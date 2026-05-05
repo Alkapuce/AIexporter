@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import type { ConversationBundle } from "./conversation";
 import { resolveBundleTitle } from "./title";
 
-function createBundle(title?: string, firstUserMarkdown = "详细介绍明末的越南（主要是北部红河三角洲地区）"): ConversationBundle {
+function createBundle(
+  title?: string,
+  firstUserMarkdown = "详细介绍明末的越南（主要是北部红河三角洲地区）",
+): ConversationBundle {
   return {
     platform: "gemini",
     sourceId: "b097460849c62e47",

@@ -75,7 +75,10 @@ export function extractDiscoveryPayloadsFromResponse(payload: unknown): BridgeNe
   return mergeDiscoveryPayloads(items);
 }
 
-export function extractDiscoveryPayloadsFromDocument(document: Document, origin = "https://chat.deepseek.com"): BridgeNetworkPayload[] {
+export function extractDiscoveryPayloadsFromDocument(
+  document: Document,
+  origin = "https://chat.deepseek.com",
+): BridgeNetworkPayload[] {
   const links = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href*="/a/chat/s/"]'));
   const deduped = new Map<string, BridgeNetworkPayload>();
 
@@ -115,6 +118,6 @@ export function summarizeHistoryPage(payload: DeepSeekHistoryResponse): DeepSeek
   return {
     payloads: extractDiscoveryPayloadsFromResponse(payload),
     hasMore: Boolean(payload.data?.biz_data?.has_more),
-    nextCursorUpdatedAt: sessions.length > 0 ? sessions[sessions.length - 1]?.updated_at ?? null : null,
+    nextCursorUpdatedAt: sessions.length > 0 ? (sessions[sessions.length - 1]?.updated_at ?? null) : null,
   };
 }

@@ -158,19 +158,33 @@ export function PopupQuickExportCard({ queueState, onRefresh }: PopupQuickExport
         </div>
         <ActionButton
           disabled={busy}
-          style={{ background: "var(--aiexporter-button-secondary-background)", color: "var(--aiexporter-button-secondary-text)" }}
-          onClick={() => void refreshActiveTarget().catch((loadError) => {
-            setError(loadError instanceof Error ? loadError.message : "无法识别当前标签页。");
-          })}
+          style={{
+            background: "var(--aiexporter-button-secondary-background)",
+            color: "var(--aiexporter-button-secondary-text)",
+          }}
+          onClick={() =>
+            void refreshActiveTarget().catch((loadError) => {
+              setError(loadError instanceof Error ? loadError.message : "无法识别当前标签页。");
+            })
+          }
         >
           识别当前页
         </ActionButton>
       </div>
 
       <div style={{ ...sectionStyle, background: "var(--aiexporter-surface-background)", gap: 6 }}>
-        <div><strong>平台：</strong>{target?.platform ? target.platform : "未识别"}</div>
-        <div><strong>标题：</strong>{target?.title || "未识别"}</div>
-        <div style={{ wordBreak: "break-all" }}><strong>URL：</strong>{target?.url || "未识别"}</div>
+        <div>
+          <strong>平台：</strong>
+          {target?.platform ? target.platform : "未识别"}
+        </div>
+        <div>
+          <strong>标题：</strong>
+          {target?.title || "未识别"}
+        </div>
+        <div style={{ wordBreak: "break-all" }}>
+          <strong>URL：</strong>
+          {target?.url || "未识别"}
+        </div>
         {!target?.supported ? (
           <div style={{ color: "var(--aiexporter-danger-text-color)", fontSize: 12 }}>
             当前标签页必须是 ChatGPT、Gemini、AI Studio 或 DeepSeek 的会话页。
@@ -203,21 +217,30 @@ export function PopupQuickExportCard({ queueState, onRefresh }: PopupQuickExport
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <ActionButton
             disabled={busy}
-            style={{ background: "var(--aiexporter-button-secondary-background)", color: "var(--aiexporter-button-secondary-text)" }}
+            style={{
+              background: "var(--aiexporter-button-secondary-background)",
+              color: "var(--aiexporter-button-secondary-text)",
+            }}
             onClick={() => void onBrowse()}
           >
             浏览目录
           </ActionButton>
           <ActionButton
             disabled={busy}
-            style={{ background: "var(--aiexporter-button-secondary-background)", color: "var(--aiexporter-button-secondary-text)" }}
+            style={{
+              background: "var(--aiexporter-button-secondary-background)",
+              color: "var(--aiexporter-button-secondary-text)",
+            }}
             onClick={() => void useHomeDownloads()}
           >
             用 ~/Downloads
           </ActionButton>
           <ActionButton
             disabled={busy}
-            style={{ background: "var(--aiexporter-button-secondary-background)", color: "var(--aiexporter-button-secondary-text)" }}
+            style={{
+              background: "var(--aiexporter-button-secondary-background)",
+              color: "var(--aiexporter-button-secondary-text)",
+            }}
             onClick={() =>
               setOptions((current) => ({
                 ...current,
@@ -236,11 +259,13 @@ export function PopupQuickExportCard({ queueState, onRefresh }: PopupQuickExport
       <div style={{ display: "grid", gap: 8 }}>
         <div style={{ fontWeight: 700 }}>模板预设</div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {([
-            ["complete", "完整"],
-            ["standard", "标准"],
-            ["share", "分享"],
-          ] as const).map(([preset, label]) => (
+          {(
+            [
+              ["complete", "完整"],
+              ["standard", "标准"],
+              ["share", "分享"],
+            ] as const
+          ).map(([preset, label]) => (
             <ActionButton
               key={preset}
               disabled={busy}

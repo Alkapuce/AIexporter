@@ -7,4 +7,3 @@ if (!rootElement) {
 }
 
 ReactDOM.createRoot(rootElement).render(<Dashboard mode="popup" />);
-

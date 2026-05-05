@@ -45,4 +45,3 @@ export const ConversationDetailsResponseSchema = z.object({
   revisions: z.array(z.string()),
 });
 export type ConversationDetailsResponse = z.infer<typeof ConversationDetailsResponseSchema>;
-
