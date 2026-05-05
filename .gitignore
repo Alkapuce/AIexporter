@@ -7,11 +7,11 @@ dist
 coverage
 data
 tmp
+-Force/
 .playwright-mcp
 *.log
 .DS_Store
 Thumbs.db
-AGENTS.md
-CLAUDE.md
-docs/
+docs/feedback0.2.2.md
+docs/feedbackResolved.md
 apps/extension/native-host/manifest.json

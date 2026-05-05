@@ -13,7 +13,7 @@ Thanks for your interest in contributing! This document outlines the process for
 
 ```bash
 # Clone the repository
-git clone https://github.com/user/aiexporter.git
+git clone https://github.com/<your-username>/aiexporter.git
 cd aiexporter
 
 # Enable Corepack and install dependencies

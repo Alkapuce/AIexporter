@@ -22,7 +22,7 @@ const pingNativeHost = vi.fn().mockResolvedValue({ ok: true });
 const writeFileWithNativeHost = vi
   .fn()
   .mockImplementation(async (relativePath: string, content: string, encoding: "utf8" | "base64", rootPath?: string) => {
-    const resolvedRoot = rootPath ?? "C:\\Users\\qpj\\Downloads";
+    const resolvedRoot = rootPath ?? "C:\\Users\\TestUser\\Downloads";
     const resolvedPath = `${resolvedRoot.replace(/[\\/]+$/, "")}\\${relativePath.replace(/\//g, "\\")}`;
     writtenPaths.add(resolvedPath.toLowerCase());
     writtenFileContents.set(resolvedPath.toLowerCase(), content);
@@ -274,7 +274,7 @@ describe("persistBundle native host persistence", () => {
     pingNativeHost.mockResolvedValue({ ok: true });
     writeFileWithNativeHost.mockImplementation(
       async (relativePath: string, content: string, encoding: "utf8" | "base64", rootPath?: string) => {
-        const resolvedRoot = rootPath ?? "C:\\Users\\qpj\\Downloads";
+        const resolvedRoot = rootPath ?? "C:\\Users\\TestUser\\Downloads";
         const resolvedPath = `${resolvedRoot.replace(/[\\/]+$/, "")}\\${relativePath.replace(/\//g, "\\")}`;
         writtenPaths.add(resolvedPath.toLowerCase());
         writtenFileContents.set(resolvedPath.toLowerCase(), content);
@@ -292,7 +292,7 @@ describe("persistBundle native host persistence", () => {
     }));
     downloadRemoteAsset.mockImplementation(
       async (relativePath: string, _url: string, _options: { forceFresh?: boolean } = {}, rootPath?: string) => {
-        const resolvedRoot = rootPath ?? "C:\\Users\\qpj\\Downloads";
+        const resolvedRoot = rootPath ?? "C:\\Users\\TestUser\\Downloads";
         const resolvedPath = `${resolvedRoot.replace(/[\\/]+$/, "")}\\${relativePath.replace(/\//g, "\\")}`;
         writtenPaths.add(resolvedPath.toLowerCase());
         return {

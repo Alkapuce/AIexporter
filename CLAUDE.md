@@ -98,8 +98,7 @@ The extension dashboard provides:
 Use short imperative subjects, optionally with Conventional Commit prefix (`chore:`, `fix:`, `feat:`). Example: `fix: guard missing DeepSeek history nodes`.
 
 ## Notes for Claude Code
-- The user's global `CLAUDE.md` (in `C:\Users\qpj\.claude\`) has additional environment preferences (PowerShell 7, uv for Python, etc.). Prefer PowerShell commands when running scripts, but the repo scripts use `corepack pnpm` which works in any shell.
 - When making changes, keep scope limited to the relevant app or package. Avoid cross-cutting refactors unrelated to the task.
 - The extension uses WXT - refer to WXT docs for entrypoint and build configuration.
-- Native host changes require re-registration; the user may need to run the PowerShell script manually.
+- Native host changes require re-registration; run the PowerShell script manually after changes.
 - Server uses SQLite (better-sqlite3). Migrations are handled via code in `apps/server/src/db.ts`.

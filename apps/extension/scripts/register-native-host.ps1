@@ -1,5 +1,5 @@
 param(
-  [string]$ExtensionId = "mllibebijafamehilmldnodfkkimmpdf"
+  [string]$ExtensionId = "<your-extension-id>"
 )
 
 $ErrorActionPreference = "Stop"

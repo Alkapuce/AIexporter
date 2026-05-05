@@ -4,7 +4,7 @@ const http = require("node:http");
 const { execFileSync } = require("node:child_process");
 
 const DEBUG_PORT = process.env.AIEXPORTER_EDGE_DEBUG_PORT ?? "9222";
-const EXTENSION_ID = process.env.AIEXPORTER_EXTENSION_ID ?? "mllibebijafamehilmldnodfkkimmpdf";
+const EXTENSION_ID = process.env.AIEXPORTER_EXTENSION_ID ?? "your-extension-id-here";
 const DASHBOARD_URL = `chrome-extension://${EXTENSION_ID}/dashboard.html`;
 const BACKGROUND_URL = `chrome-extension://${EXTENSION_ID}/background.js`;
 const NATIVE_HOST_NAME = "com.aiexporter.shell";
