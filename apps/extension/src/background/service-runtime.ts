@@ -217,6 +217,12 @@ export function createBackgroundServiceRuntime(): BackgroundServiceRuntime {
     return anchorMs + Math.max(0, config.discoverySweepIntervalMs);
   }
 
+  function isDiscoveryStale(service: PlatformServiceState, config: PlatformRuntimeConfig): boolean {
+    const anchorMs = getDiscoveryCadenceAnchorMs(service);
+    if (anchorMs === undefined) return true;
+    return Date.now() - anchorMs >= config.discoverySweepIntervalMs * 2;
+  }
+
   function getDiscoveryAttemptTimeoutMs(
     platform: SourcePlatform,
     mode: DiscoverySweepMode,
@@ -250,9 +256,20 @@ export function createBackgroundServiceRuntime(): BackgroundServiceRuntime {
         );
         nextEntries = upsertConversationIndexEntry(nextEntries, event, options.discoveryState);
 
+        // When the existing index entry carries a real sourceUpdatedAt but the
+        // incoming event lacks one (e.g. passive URL-only discovery), the
+        // fingerprint mismatch is a false positive caused by missing data rather
+        // than an actual conversation update.  Skip enqueue in that case.
+        const fingerprintChanged =
+          existing && existing.latestDiscoveryFingerprint !== event.revisionFingerprint;
+        const isTimestampDegradation =
+          fingerprintChanged &&
+          existing.latestSourceUpdatedAt &&
+          !event.sourceUpdatedAt;
+
         const shouldEnqueue =
           !existing ||
-          existing.latestDiscoveryFingerprint !== event.revisionFingerprint ||
+          (fingerprintChanged && !isTimestampDegradation) ||
           existing.exportState !== "exported" ||
           existing.latestExportCompatibilityVersion !== AIEXPORTER_EXPORT_COMPATIBILITY_VERSION;
 
@@ -1419,11 +1436,11 @@ export function createBackgroundServiceRuntime(): BackgroundServiceRuntime {
         return;
       }
 
-      if (hasOutstandingQueueWork) {
+      if (hasOutstandingQueueWork && !isDiscoveryStale(service, config)) {
         await writeBackgroundLog(
           "background.discovery",
           "debug",
-          "Deferred startup discovery because export work is already queued.",
+          "Deferred startup discovery because export work is already queued and the last discovery is still fresh.",
           {
             code: "discovery.deferred_until_queue_drains",
             platform,
@@ -1497,11 +1514,11 @@ export function createBackgroundServiceRuntime(): BackgroundServiceRuntime {
       return;
     }
 
-    if (hasOutstandingQueueWork) {
+    if (hasOutstandingQueueWork && !isDiscoveryStale(service, config)) {
       await writeBackgroundLog(
         "background.discovery",
         "debug",
-        "Deferred scheduled discovery because export work is already queued.",
+        "Deferred scheduled discovery because export work is already queued and the last discovery is still fresh.",
         {
           code: "discovery.deferred_until_queue_drains",
           platform,

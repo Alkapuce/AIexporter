@@ -18,7 +18,7 @@ function createDefaultPlatformRuntimeConfig(overrides: Partial<PlatformRuntimeCo
     minStartIntervalMs: 8_000,
     navigationTimeoutMs: 30_000,
     settleDelayMs: 1_200,
-    discoverySweepIntervalMs: 24 * 60 * 60 * 1_000,
+    discoverySweepIntervalMs: 6 * 60 * 60 * 1_000,
     reuseWorkerTabs: true,
     bootstrapRequireFullHistory: true,
     bootstrapWindowMode: "background_tab",

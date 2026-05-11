@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.6] - 2026-05-11
+
+### Added
+
+- DeepSeek sidebar time label extraction (relative, absolute, and Chinese formats) for conversation metadata
+- Discovery staleness detection: stale discoveries now run even when export work is queued
+
+### Changed
+
+- Reduced discovery sweep interval from 24h to 6h for fresher conversation indexing
+- Simplified native host `openFile` to use `Invoke-Item` (ShellExecute) instead of registry parsing
+
+### Fixed
+
+- False positive re-enqueue when URL-only discovery events lack `sourceUpdatedAt` but existing index entries carry real timestamps
+
 ## [0.2.5] - 2026-05-05
 
 ### Security

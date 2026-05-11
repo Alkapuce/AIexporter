@@ -3,6 +3,29 @@ import type { DeepSeekHistoryResponse, DeepSeekSessionCandidate } from "./types"
 
 const CONVERSATION_PATTERN = /^https?:\/\/chat\.deepseek\.com\/a\/chat\/(?:s\/)?([a-zA-Z0-9-]+)/i;
 
+const RELATIVE_TIME_LABEL_PATTERN =
+  /\b((?:today|yesterday|just now|last week|last month|a few seconds ago|a minute ago|an hour ago)|\d+\s+(?:minute|hour|day|week|month|year)s?\s+ago)\b/i;
+const ABSOLUTE_TIME_LABEL_PATTERN =
+  /\b((?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+\d{1,2}(?:,\s+\d{4})?)\b/i;
+const CHINESE_TIME_LABEL_PATTERN =
+  /(\d+\s*(?:分钟|小时|天|周|月|年)前|刚刚|今天|昨天|前天|\d{4}[年-]\d{1,2}[月-]\d{1,2}日?)/i;
+
+function extractTimeLabelFromText(text: string | null | undefined): string | undefined {
+  const normalized = text?.replace(/\s+/g, " ").trim();
+  if (!normalized) return undefined;
+
+  const relativeMatch = normalized.match(RELATIVE_TIME_LABEL_PATTERN);
+  if (relativeMatch?.[1]) return relativeMatch[1].trim();
+
+  const absoluteMatch = normalized.match(ABSOLUTE_TIME_LABEL_PATTERN);
+  if (absoluteMatch?.[1]) return absoluteMatch[1].trim();
+
+  const chineseMatch = normalized.match(CHINESE_TIME_LABEL_PATTERN);
+  if (chineseMatch?.[1]) return chineseMatch[1].trim();
+
+  return undefined;
+}
+
 function normalizeTimestamp(value: unknown): string | undefined {
   if (typeof value === "number" && Number.isFinite(value)) {
     return new Date(value * 1000).toISOString();
@@ -90,15 +113,94 @@ export function extractDiscoveryPayloadsFromDocument(
     if (!sourceId) return;
 
     const title = link.textContent?.trim().replace(/\s+/g, " ");
+    const timeLabel = findTimeLabelNearElement(link);
+
+    const existing = deduped.get(sourceId);
+    if (existing) {
+      deduped.set(sourceId, {
+        ...existing,
+        title: title || existing.title,
+        sourceUpdatedLabel: timeLabel ?? existing.sourceUpdatedLabel,
+      });
+      return;
+    }
+
     deduped.set(sourceId, {
       sourceId,
       url: absoluteUrl,
       title: title || undefined,
       sourceUpdatedAt: undefined,
+      sourceUpdatedLabel: timeLabel,
     });
   });
 
   return Array.from(deduped.values());
+}
+
+/**
+ * Walk up the DOM from an anchor element to find a time label (e.g. "2 days ago")
+ * in nearby text content.  DeepSeek sidebar rows typically nest the time label
+ * inside the same container as the link or in an adjacent element.
+ */
+function findTimeLabelNearElement(anchor: HTMLAnchorElement): string | undefined {
+  // Try the anchor's own aria-label / title first.
+  const ariaLabel = anchor.getAttribute("aria-label");
+  const titleAttr = anchor.getAttribute("title");
+  const directMatch =
+    extractTimeLabelFromText(ariaLabel) ??
+    extractTimeLabelFromText(titleAttr);
+  if (directMatch) return directMatch;
+
+  // Walk up to a plausible row container.
+  let container: Element | null = anchor;
+  for (let depth = 0; container && depth < 6; depth += 1) {
+    if (
+      container.matches(
+        [
+          "li",
+          "[role='listitem']",
+          ".conversation-item",
+          ".chat-item",
+          ".session-item",
+          ".sidebar-item",
+          "[class*='conversation']",
+          "[class*='session']",
+          "[class*='sidebar']",
+        ].join(", "),
+      )
+    ) {
+      break;
+    }
+    container = container.parentElement;
+  }
+  if (!container) container = anchor.parentElement;
+  if (!container) return undefined;
+
+  // Collect text from the container and immediate children, excluding the anchor's own title text.
+  const candidateTexts: string[] = [];
+  const anchorTitle = anchor.textContent?.trim().replace(/\s+/g, " ") ?? "";
+
+  // Check sibling elements (time labels often sit in a separate <span> or <div>).
+  if (container !== anchor) {
+    for (const child of Array.from(container.children)) {
+      if (child === anchor) continue;
+      const text = child.textContent?.trim().replace(/\s+/g, " ");
+      if (text && text !== anchorTitle) {
+        candidateTexts.push(text);
+      }
+    }
+  }
+
+  // Also check the container's full text.
+  const containerText = container.textContent?.trim().replace(/\s+/g, " ");
+  if (containerText) candidateTexts.push(containerText);
+
+  for (const text of candidateTexts) {
+    const timeLabel = extractTimeLabelFromText(text);
+    if (timeLabel) return timeLabel;
+  }
+
+  return undefined;
 }
 
 export function mergeDiscoveryPayloads(

@@ -211,7 +211,7 @@ function createQueueState(): QueueState {
         desiredRunning: true,
         activeWorkers: 0,
         activeDiscoveryTabs: 0,
-        lastDiscoveryAt: "2026-04-24T09:30:00.000Z",
+        lastDiscoveryAt: new Date().toISOString(),
         stats: {
           discoveredTotal: 1,
           exportedTotal: 0,

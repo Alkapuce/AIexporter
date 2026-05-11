@@ -51,42 +51,17 @@ function buildOpenFilePowerShell(targetPath) {
   return [
     "$ErrorActionPreference = 'Stop'",
     `$targetPath = '${escapedTarget}'`,
-    "$extension = [System.IO.Path]::GetExtension($targetPath)",
-    '$progId = (Get-ItemProperty "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\FileExts\\$extension\\UserChoice" -ErrorAction SilentlyContinue).ProgId',
-    "if (-not $progId) { $progId = (Get-ItemProperty \"Registry::HKEY_CLASSES_ROOT\\$extension\" -ErrorAction SilentlyContinue).'(default)' }",
-    "$command = $null",
-    "if ($progId) {",
-    "  $command = (Get-ItemProperty \"Registry::HKEY_CLASSES_ROOT\\$progId\\shell\\open\\command\" -ErrorAction SilentlyContinue).'(default)'",
-    "}",
-    "if ($progId -eq 'Antigravity.md') {",
-    "  $proc = Start-Process -FilePath 'notepad.exe' -ArgumentList ('\"' + $targetPath + '\"') -PassThru",
-    "  Start-Sleep -Milliseconds 800",
-    "  $shell = New-Object -ComObject WScript.Shell",
-    "  $shell.AppActivate($proc.Id) | Out-Null",
-    "  exit 0",
-    "}",
-    "if ($command) {",
-    '  if ($command -match \'^"([^"]+)"\\s*(.*)$\') {',
-    "    $exe = $Matches[1]",
-    "    $rest = $Matches[2]",
-    "  } else {",
-    "    $parts = $command -split '\\s+', 2",
-    "    $exe = $parts[0]",
-    "    $rest = if ($parts.Length -gt 1) { $parts[1] } else { '' }",
-    "  }",
-    "  $argumentString = $rest.Replace('%1', ('\"' + $targetPath + '\"')).Replace('%L', ('\"' + $targetPath + '\"')).Replace('%*', ('\"' + $targetPath + '\"'))",
-    "  $proc = Start-Process -FilePath $exe -ArgumentList $argumentString -PassThru",
-    "  Start-Sleep -Milliseconds 1200",
-    "  $shell = New-Object -ComObject WScript.Shell",
-    "  if (-not ($shell.AppActivate($proc.Id))) {",
-    "    $shell.AppActivate([System.IO.Path]::GetFileNameWithoutExtension($exe)) | Out-Null",
-    "  }",
-    "  exit 0",
-    "}",
-    "Start-Process -LiteralPath $targetPath",
-    "Start-Sleep -Milliseconds 1200",
+    // Invoke-Item delegates to Windows ShellExecute, which is the canonical
+    // way to open a file with the system's default handler — exactly as if
+    // the user double-clicked the file in Explorer.
+    "Invoke-Item -LiteralPath $targetPath",
+    // Give the target application a moment to open its window, then try to
+    // bring it to the foreground for a smoother UX.
+    "Start-Sleep -Milliseconds 800",
     "$shell = New-Object -ComObject WScript.Shell",
-    "$shell.AppActivate([System.IO.Path]::GetFileNameWithoutExtension($targetPath)) | Out-Null",
+    "if (-not ($shell.AppActivate([System.IO.Path]::GetFileNameWithoutExtension($targetPath)))) {",
+    "  $shell.AppActivate([System.IO.Path]::GetFileName($targetPath)) | Out-Null",
+    "}",
   ].join("; ");
 }
 
